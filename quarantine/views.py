@@ -370,9 +370,16 @@ def fail_qc_sample(request, sample_id):
         if not sample.received_date:
             sample.update_qc_received(request.user)
         
-        # Get failure reason from request body
-        body = json.loads(request.body.decode('utf-8'))
-        failure_reason = body.get('failure_reason', 'Sample failed QC testing')
+        # Get failure reason from request body (handle both JSON and form data)
+        failure_reason = 'Sample failed QC testing'  # Default
+        
+        try:
+            if request.body:
+                body = json.loads(request.body.decode('utf-8'))
+                failure_reason = body.get('failure_reason', failure_reason)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            # Fallback to form data if JSON parsing fails
+            failure_reason = request.POST.get('failure_reason', failure_reason)
         
         # Update sample with QC failure
         sample.update_qc_decision(request.user, 'failed', failure_reason)

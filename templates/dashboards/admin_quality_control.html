@@ -108,10 +108,14 @@
                             {% endif %}
                         </td>
                         <td>
+                            {% if checkpoint.phase_execution.bmr.id %}
                             <div class="btn-group" role="group">
                                 <a href="{% url 'bmr:detail' checkpoint.phase_execution.bmr.id %}" class="btn btn-primary btn-sm">BMR Details</a>
                                 <a href="{% url 'reports:timeline_detail' checkpoint.phase_execution.bmr.id %}" class="btn btn-outline-primary btn-sm">Timeline</a>
                             </div>
+                            {% else %}
+                            <span class="text-muted">No BMR</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}

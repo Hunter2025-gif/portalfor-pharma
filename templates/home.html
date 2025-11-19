@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load dashboard_permissions %}
 
 {% block title %}Kampala Pharmaceutical Industries - Operations System{% endblock %}
 
@@ -39,7 +40,7 @@
                                     <i class="fas fa-file-medical fa-2x text-primary mb-2"></i>
                                     <h6>Create BMR</h6>
                                     <p class="small text-muted">Create new Batch Manufacturing Record</p>
-                                    <a href="{% url 'create_bmr' %}" class="btn btn-primary btn-sm">Create BMR</a>
+                                    <a href="{% url 'bmr:create_bmr_request' %}" class="btn btn-primary btn-sm">Create BMR</a>
                                 </div>
                             </div>
                         </div>
@@ -49,46 +50,53 @@
                                     <i class="fas fa-list fa-2x text-info mb-2"></i>
                                     <h6>View BMRs</h6>
                                     <p class="small text-muted">Manage existing BMRs</p>
-                                    <a href="{% url 'admin:bmr_bmr_changelist' %}" class="btn btn-info btn-sm">View BMRs</a>
+                                    <a href="{% url 'bmr:list' %}" class="btn btn-info btn-sm">View BMRs</a>
                                 </div>
                             </div>
                         </div>
-                        {% endif %}
-                        
-                        {% if user.is_staff %}
-                        <div class="col-md-6 mb-3">
-                            <div class="card border-info">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-chart-line fa-2x text-info mb-2"></i>
-                                    <h6>Admin Dashboard</h6>
-                                    <p class="small text-muted">Comprehensive admin overview</p>
-                                    <a href="{% url 'dashboards:admin_dashboard' %}" class="btn btn-info btn-sm">Admin Dashboard</a>
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
-                        
                         <div class="col-md-6 mb-3">
                             <div class="card border-success">
                                 <div class="card-body text-center">
-                                    <i class="fas fa-cogs fa-2x text-success mb-2"></i>
-                                    <h6>Admin Panel</h6>
-                                    <p class="small text-muted">Full system administration</p>
-                                    <a href="{% url 'admin:index' %}" class="btn btn-success btn-sm">Admin Panel</a>
+                                    <i class="fas fa-clipboard-check fa-2x text-success mb-2"></i>
+                                    <h6>QA Dashboard</h6>
+                                    <p class="small text-muted">Quality assurance overview</p>
+                                    <a href="{% url 'dashboards:qa' %}" class="btn btn-success btn-sm">QA Dashboard</a>
                                 </div>
                             </div>
                         </div>
+                        {% endif %}
                         
+                        <!-- Dashboard Cards using Permission System -->
+                        {% dashboard_card user 'admin_dashboard' 'Admin Dashboard' 'Comprehensive admin overview' 'fas fa-chart-line' 'dashboards:admin_dashboard' 'info' %}
+                        {% dashboard_card user 'system_logs' 'System Logs' 'Monitor system activity & errors' 'fas fa-chart-bar' 'dashboards:system_logs' 'secondary' %}
+                        
+                        <!-- System Management Dashboard Cards -->
+                        {% dashboard_card user 'user_management' 'User Management' 'Manage user accounts & roles' 'fas fa-users-cog' 'dashboards:user_management' 'danger' %}
+                        {% dashboard_card user 'machine_management' 'Machine Management' 'Configure production equipment' 'fas fa-cogs' 'dashboards:machine_management' 'warning' %}
+                        {% dashboard_card user 'inventory' 'Inventory Management' 'Raw materials & stock control' 'fas fa-warehouse' 'dashboards:inventory' 'success' %}
+                        {% dashboard_card user 'quality_control' 'Quality Control' 'QC standards & procedures' 'fas fa-shield-alt' 'dashboards:quality_control' 'info' %}
+                        {% dashboard_card user 'system_health' 'System Health' 'Server performance & monitoring' 'fas fa-heart-monitor' 'dashboards:system_health' 'primary' %}
+                        
+                        <!-- Django Admin Panel for Superusers -->
+                        {% if user.is_superuser %}
                         <div class="col-md-6 mb-3">
-                            <div class="card border-warning">
+                            <div class="card border-dark">
                                 <div class="card-body text-center">
-                                    <i class="fas fa-tasks fa-2x text-warning mb-2"></i>
-                                    <h6>My Tasks</h6>
-                                    <p class="small text-muted">View assigned phases</p>
-                                    <a href="{% url 'admin:workflow_batchphaseexecution_changelist' %}" class="btn btn-warning btn-sm">View Tasks</a>
+                                    <i class="fas fa-tools fa-2x text-dark mb-2"></i>
+                                    <h6>Django Admin</h6>
+                                    <p class="small text-muted">Full system administration</p>
+                                    <a href="{% url 'admin:index' %}" class="btn btn-dark btn-sm">Admin Panel</a>
                                 </div>
                             </div>
                         </div>
+                        {% endif %}
+                        
+                        <!-- Role-Specific Dashboard Cards -->
+                        {% dashboard_card user 'production_manager' 'Production Dashboard' 'Production planning & oversight' 'fas fa-industry' 'dashboards:production_manager' 'warning' %}
+                        {% dashboard_card user 'store_dashboard' 'Store Dashboard' 'Raw material release' 'fas fa-warehouse' 'dashboards:store' 'warning' %}
+                        {% dashboard_card user 'qc_dashboard' 'QC Dashboard' 'Quality control testing' 'fas fa-microscope' 'dashboards:qc' 'warning' %}
+                        {% dashboard_card user 'regulatory_dashboard' 'Regulatory Dashboard' 'BMR approvals & compliance' 'fas fa-gavel' 'dashboards:regulatory' 'warning' %}
+                        {% dashboard_card user 'operator_dashboard' 'My Tasks' 'Assigned production phases' 'fas fa-tasks' 'dashboards:operator' 'warning' %}
                     </div>
                 </div>
             </div>

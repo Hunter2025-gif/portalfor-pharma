@@ -5,20 +5,29 @@
 __pycache__/
 local_settings.py
 db.sqlite3
+db.sqlite3-journal
 media/
 staticfiles/
+logs/
+*.sqlite3
 
 # Virtual Environment
 pharma_env/
 .venv/
 venv/
 env/
+Scripts/
+Lib/
+Include/
+pyvenv.cfg
 
-# IDE
+# IDE and Editors
 .vscode/
 .idea/
 *.swp
 *.swo
+.DS_Store
+Thumbs.db
 
 # Development and Testing Files
 test_*.py

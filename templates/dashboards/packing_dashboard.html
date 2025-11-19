@@ -100,6 +100,7 @@
                                         <th>Packaging Units Needed</th>
                                         <th>Phase</th>
                                         <th>Status</th>
+                                        <th>Timer</th>
                                         <th>Priority</th>
                                         <th>Actions</th>
                                     </tr>
@@ -145,6 +146,43 @@
                                                 <span class="badge bg-info">In Progress</span>
                                             {% else %}
                                                 <span class="badge bg-success">{{ phase.status|title }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if phase.status == 'in_progress' and phase.started_date %}
+                                                {% if phase.is_overrun %}
+                                                    <div class="countdown-timer" 
+                                                         data-phase-id="{{ phase.id }}"
+                                                         data-remaining-seconds="0">
+                                                        <span class="text-danger">
+                                                            <i class="fas fa-exclamation-triangle"></i>
+                                                            OVERRUN: +{{ phase.remaining_hours|floatformat:1|slice:"1:" }}h
+                                                        </span>
+                                                    </div>
+                                                {% else %}
+                                                    <div class="countdown-timer" 
+                                                         data-phase-id="{{ phase.id }}"
+                                                         data-remaining-seconds="{{ phase.remaining_seconds }}">
+                                                        <span class="countdown-display text-primary">
+                                                            <i class="fas fa-clock"></i>
+                                                            <span class="timer-text">{{ phase.remaining_hours|floatformat:1 }}h left</span>
+                                                        </span>
+                                                        <div class="progress mt-1" style="height: 4px;">
+                                                            <div class="progress-bar bg-info" 
+                                                                 style="width: {{ phase.progress_percent }}%"></div>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                            {% elif phase.status == 'pending' %}
+                                                <span class="text-muted">
+                                                    <i class="fas fa-clock"></i> Not started
+                                                </span>
+                                            {% elif phase.status == 'completed' %}
+                                                <span class="text-success">
+                                                    <i class="fas fa-check-circle"></i> Completed
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">{{ phase.status|title }}</span>
                                             {% endif %}
                                         </td>
                                         <td>
@@ -493,6 +531,114 @@ function toggleChangeoverFields() {
 document.getElementById('packingForm').addEventListener('submit', function(e) {
     // Allow normal form submission to POST to the same URL
     return true;
+});
+
+// ==================== COUNTDOWN TIMER FUNCTIONALITY ====================
+
+function updateCountdownTimers() {
+    const timers = document.querySelectorAll('.countdown-timer');
+    
+    timers.forEach(timer => {
+        const remainingSeconds = parseInt(timer.dataset.remainingSeconds);
+        
+        if (remainingSeconds > 0) {
+            // Count down
+            timer.dataset.remainingSeconds = remainingSeconds - 1;
+            
+            const hours = Math.floor(remainingSeconds / 3600);
+            const minutes = Math.floor((remainingSeconds % 3600) / 60);
+            const seconds = remainingSeconds % 60;
+            
+            let display = '';
+            if (hours > 0) {
+                display = `${hours}h ${minutes}m left`;
+            } else if (minutes > 0) {
+                display = `${minutes}m ${seconds}s left`;
+            } else {
+                display = `${seconds}s left`;
+            }
+            
+            const timerText = timer.querySelector('.timer-text');
+            if (timerText) {
+                timerText.textContent = display;
+            }
+            
+            // Update progress bar
+            const progressBar = timer.querySelector('.progress-bar');
+            if (progressBar) {
+                const phaseId = timer.dataset.phaseId;
+                // You could calculate progress here if needed
+            }
+        } else if (remainingSeconds === 0) {
+            // Timer just expired - show overrun
+            timer.innerHTML = `
+                <span class="text-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>TIME EXPIRED!</strong>
+                </span>
+            `;
+            timer.dataset.remainingSeconds = -1; // Mark as overrun
+            
+            // Send notification to admin (only once per phase)
+            const phaseId = timer.dataset.phaseId;
+            if (phaseId && !timer.dataset.notificationSent) {
+                sendOverrunNotification(phaseId);
+                timer.dataset.notificationSent = 'true';
+            }
+        } else {
+            // Already overrunning - could show overrun time
+            const overrunSeconds = Math.abs(remainingSeconds);
+            const overrunHours = Math.floor(overrunSeconds / 3600);
+            const overrunMinutes = Math.floor((overrunSeconds % 3600) / 60);
+            
+            let overrunDisplay = '';
+            if (overrunHours > 0) {
+                overrunDisplay = `OVERRUN: +${overrunHours}h ${overrunMinutes}m`;
+            } else {
+                overrunDisplay = `OVERRUN: +${overrunMinutes}m`;
+            }
+            
+            timer.innerHTML = `
+                <span class="text-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>${overrunDisplay}</strong>
+                </span>
+            `;
+            timer.dataset.remainingSeconds = remainingSeconds - 1;
+        }
+    });
+}
+
+function sendOverrunNotification(phaseId) {
+    // Send notification to admin when phase timer expires
+    fetch('{% url "dashboards:phase_timer_expired" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            'phase_id': phaseId
+        })
+    })
+    .then(response => {
+        if (response.ok) {
+            console.log('Timer expiration notification sent to admin for phase:', phaseId);
+        } else {
+            console.error('Failed to send timer notification:', response.status);
+        }
+    })
+    .catch(error => {
+        console.error('Error sending timer notification:', error);
+    });
+}
+
+// Start countdown timers
+setInterval(updateCountdownTimers, 1000); // Update every second
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateCountdownTimers();
 });
 </script>
 {% endblock %}

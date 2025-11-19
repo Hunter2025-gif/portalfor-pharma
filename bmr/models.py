@@ -9,11 +9,11 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 def validate_batch_number(value):
-    """Validate batch number format XXX-YYYY"""
-    pattern = r'^\d{3}\d{4}$'  # 3 digits + 4 digits (e.g., 0012025)
+    """Validate batch number format XXXYYYY"""
+    pattern = r'^\d{3}\d{4}$'  # 3 digits + 4 digits (e.g., 3332025)
     if not re.match(pattern, value):
         raise ValidationError(
-            'Batch number must be in format XXXYYYY (e.g., 0012025)'
+            'Batch number must be in format XXXYYYY (e.g., 3332025)'
         )
 
 class BMR(models.Model):
@@ -35,7 +35,7 @@ class BMR(models.Model):
         max_length=10, 
         unique=True,
         validators=[validate_batch_number],
-        help_text="Enter batch number in format XXXYYYY (e.g., 0012025)"
+        help_text="Enter batch number in format XXXYYYY (e.g., 3332025)"
     )
     manufacturing_date = models.DateField(
         null=True,
@@ -134,11 +134,25 @@ class BMR(models.Model):
         if is_new or (old_status != 'approved' and self.status == 'approved'):
             from workflow.services import WorkflowService
             try:
-                WorkflowService.initialize_workflow_for_bmr(self)
-                print(f"Workflow initialized for BMR {self.bmr_number}")
+                # Use new template-based initialization
+                WorkflowService.initialize_workflow_from_template(self)
+                print(f"Workflow initialized for BMR {self.bmr_number} using template system")
+                
+                # If BMR is new, activate the regulatory approval phase
+                if is_new:
+                    from workflow.models import BatchPhaseExecution
+                    regulatory_phase = BatchPhaseExecution.objects.filter(
+                        bmr=self,
+                        phase__phase_name='regulatory_approval'
+                    ).first()
+                    
+                    if regulatory_phase and regulatory_phase.status == 'not_ready':
+                        regulatory_phase.status = 'pending'
+                        regulatory_phase.save()
+                        print(f"Activated regulatory approval phase for BMR {self.bmr_number}")
                 
                 # If status is approved, activate the raw material release phase
-                if self.status == 'approved':
+                elif self.status == 'approved':
                     from workflow.models import BatchPhaseExecution
                     raw_material_phase = BatchPhaseExecution.objects.filter(
                         bmr=self,
@@ -176,6 +190,40 @@ class BMR(models.Model):
             if not BMR.objects.filter(bmr_number=candidate).exists():
                 return candidate
             next_num += 1
+    
+    def update_status_based_on_phases(self):
+        """Automatically update BMR status based on phase completion"""
+        from workflow.models import BatchPhaseExecution
+        
+        # Get phase statistics
+        total_phases = BatchPhaseExecution.objects.filter(bmr=self).count()
+        if total_phases == 0:
+            return  # No phases created yet
+        
+        completed_phases = BatchPhaseExecution.objects.filter(bmr=self, status='completed').count()
+        active_phases = BatchPhaseExecution.objects.filter(
+            bmr=self, 
+            status__in=['pending', 'in_progress']
+        ).count()
+        
+        old_status = self.status
+        
+        # Determine appropriate status
+        if completed_phases == total_phases:
+            # All phases completed
+            self.status = 'completed'
+        elif completed_phases > 0 or active_phases > 0:
+            # Some phases started or in progress
+            if self.status not in ['in_production', 'completed']:
+                self.status = 'in_production'
+        elif self.status == 'in_production' and completed_phases == 0 and active_phases == 0:
+            # Was in production but no active phases - likely rolled back
+            self.status = 'approved'
+        
+        # Save if status changed
+        if old_status != self.status:
+            self.save(update_fields=['status'])
+            print(f"BMR {self.bmr_number} status updated from '{old_status}' to '{self.status}'")
 
 class BMRMaterial(models.Model):
     """Materials required for BMR production"""
@@ -342,7 +390,7 @@ class BMRRequest(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     requested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bmr_requests')
     approved_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='approved_bmr_requests', null=True, blank=True)
-    bmr = models.ForeignKey(BMR, on_delete=models.SET_NULL, null=True, blank=True, related_name='bmr_requests')
+    bmr = models.ForeignKey(BMR, on_delete=models.CASCADE, null=True, blank=True, related_name='bmr_requests')
     
     request_date = models.DateTimeField(auto_now_add=True)
     required_date = models.DateField(help_text="Date when the BMR is required")

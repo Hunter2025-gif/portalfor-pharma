@@ -107,13 +107,13 @@
                                     {% for phase in qc_phases %}
                                     <tr>
                                         <td>
-                                            <strong class="text-primary">{{ phase.bmr.bmr_number }}</strong>
+                                            <strong class="text-primary">{{ phase.bmr.batch_number }}</strong>
                                         </td>
                                         <td>{{ phase.bmr.product.product_name }}</td>
                                         <td>
                                             <span class="badge bg-secondary">{{ phase.bmr.product.get_product_type_display }}</span>
                                         </td>
-                                        <td>{{ phase.bmr.batch_size|floatformat:0 }} {{ phase.bmr.product.unit_of_measure }}</td>
+                                        <td>{{ phase.bmr.batch_size|floatformat:0 }} {{ phase.bmr.product.batch_size_unit }}</td>
                                         <td>{{ phase.bmr.created_date|date:"M d, Y" }}</td>
                                         <td>
                                             {% if phase.status == 'pending' %}
@@ -258,7 +258,7 @@
                             <table class="table table-sm">
                                 <thead>
                                     <tr>
-                                        <th>BMR</th>
+                                        <th>Batch</th>
                                         <th>Product</th>
                                         <th>Test Date</th>
                                         <th>Result</th>
@@ -268,7 +268,7 @@
                                 <tbody>
                                     {% for result in recent_results %}
                                     <tr>
-                                        <td>{{ result.bmr.bmr_number }}</td>
+                                        <td>{{ result.bmr.batch_number }}</td>
                                         <td>{{ result.bmr.product.product_name }}</td>
                                         <td>{{ result.completed_date|date:"M d, H:i" }}</td>
                                         <td>
@@ -422,30 +422,29 @@ function approveSample(sampleId, batchNumber, sampleNumber) {
     }
 }
 
-function failSample(sampleId, batchNumber, sampleNumber) {
-    const reason = prompt(`Why is sample ${sampleNumber} for batch ${batchNumber} being failed?`);
-    if (reason && reason.trim()) {
-        fetch(`/quarantine/qc/fail-sample/${sampleId}/`, {
+function failSample(sampleId) {
+    const failureReason = prompt("Please enter the reason for failure:");
+    if (failureReason) {
+        fetch(`/quarantine/qc_samples/${sampleId}/fail/`, {
             method: 'POST',
             headers: {
                 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                failure_reason: reason.trim()
+                'failure_reason': failureReason
             })
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
+        .then(response => {
+            if (response.ok) {
                 location.reload();
             } else {
-                alert('Error: ' + data.error);
+                alert('Error processing sample failure');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('An error occurred while failing the sample.');
+            alert('Network error occurred');
         });
     }
 }

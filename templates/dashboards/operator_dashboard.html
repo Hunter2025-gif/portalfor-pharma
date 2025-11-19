@@ -2,8 +2,16 @@
 
 {% block title %}{{ dashboard_title }} - Kampala Pharmaceutical Industries{% endblock %}
 
-{% block content %}
+{% block extra_css %}
+<style>
+    .bg-normal { background-color: #28a745 !important; }
+    .bg-warning { background-color: #ffc107 !important; }
+    .bg-expired { background-color: #fd7e14 !important; }
+    .bg-overrun { background-color: #dc3545 !important; }
+</style>
+{% endblock %}
 
+{% block content %}
 <div class="container-fluid mt-4">
     <!-- Header -->
     <div class="row mb-4">
@@ -16,6 +24,7 @@
                     <p class="text-muted mb-0">Production Phase Management</p>
                 </div>
                 <div class="text-end">
+                    <small class="text-muted">Welcome, {{ user.get_full_name|default:user.username }}</small><br>
                     <small class="text-success">{{ user.get_role_display }}</small>
                 </div>
             </div>
@@ -92,6 +101,8 @@
         </div>
     </div>
 
+
+
     <!-- Active Phase Tasks -->
     <div class="row mb-4">
         <div class="col-12">
@@ -112,7 +123,7 @@
                                         <th>Product Type</th>
                                         <th>Batch Size</th>
                                         <th>Status</th>
-                                        <th>Started</th>
+                                        <th>Started / Timer</th>
                                         <th>Priority</th>
                                         <th>Actions</th>
                                     </tr>
@@ -121,25 +132,54 @@
                                     {% for phase in my_phases %}
                                     <tr>
                                         <td>
-                                            <strong class="text-primary">{{ phase.bmr.bmr_number }}</strong>
+                                            <strong class="text-primary">{{ phase.bmr.batch_number }}</strong>
                                         </td>
                                         <td>{{ phase.bmr.product.product_name }}</td>
                                         <td>
                                             <span class="badge bg-secondary">{{ phase.bmr.product.get_product_type_display }}</span>
                                         </td>
-                                        <td>{{ phase.bmr.batch_size|floatformat:0 }} {{ phase.bmr.product.unit_of_measure }}</td>
+                                        <td>{{ phase.bmr.batch_size|floatformat:0 }} {{ phase.bmr.product.batch_size_unit }}</td>
                                         <td>
+                                            {% if phase.rework_count > 0 %}
+                                                <span class="badge bg-info me-1">
+                                                    <i class="fas fa-redo"></i> Rework #{{ phase.rework_count }}
+                                                </span>
+                                            {% endif %}
                                             {% if phase.status == 'pending' %}
                                                 <span class="badge bg-warning">Pending</span>
                                             {% elif phase.status == 'in_progress' %}
-                                                <span class="badge bg-info">In Progress</span>
+                                                <span class="badge bg-primary">In Progress</span>
                                             {% else %}
                                                 <span class="badge bg-success">{{ phase.status|title }}</span>
+                                            {% endif %}
+                                            {% if phase.rollback_from %}
+                                                <br>
+                                                <small class="text-muted">
+                                                    <i class="fas fa-info-circle"></i> Failed QC: {{ phase.rollback_from.phase.phase_name }}
+                                                </small>
                                             {% endif %}
                                         </td>
                                         <td>
                                             {% if phase.started_date %}
-                                                {{ phase.started_date|date:"M d, H:i" }}
+                                                <div>{{ phase.started_date|date:"M d, H:i" }}</div>
+                                                {% if phase.timer_data %}
+                                                    <div class="mt-1">
+                                                        <small class="badge bg-{{ phase.timer_data.timer_status }} text-white">
+                                                            <i class="fas fa-clock"></i>
+                                                            <span id="countdown-{{ phase.id }}">
+                                                                {% if phase.timer_data.remaining_seconds > 0 %}
+                                                                    {{ phase.timer_data.remaining_hours|floatformat:1 }}h left
+                                                                {% else %}
+                                                                    OVERRUN
+                                                                {% endif %}
+                                                            </span>
+                                                        </small>
+                                                        <br>
+                                                        <small class="text-muted">
+                                                            {{ phase.timer_data.elapsed_hours|floatformat:1 }}h / {{ phase.timer_data.expected_hours|floatformat:1 }}h
+                                                        </small>
+                                                    </div>
+                                                {% endif %}
                                             {% else %}
                                                 <span class="text-muted">Not started</span>
                                             {% endif %}
@@ -178,7 +218,7 @@
                             </table>
                         </div>
                     {% else %}
-                        <div class="text-center py-5 no-cursor">
+                        <div class="text-center py-5">
                             <i class="fas fa-clipboard-check fa-3x text-success mb-3"></i>
                             <h5 class="text-muted">No {{ phase_name|title }} Tasks Available</h5>
                             <p class="text-muted">All your {{ phase_name }} tasks are up to date or waiting for previous phases to complete.</p>
@@ -518,5 +558,73 @@ document.getElementById('phaseForm').addEventListener('submit', function(e) {
     // Allow normal form submission to POST to the same URL
     return true;
 });
+
+// Countdown Timer Updates
+const pageLoadTime = Date.now();
+
+function updateCountdowns() {
+    {% for phase in my_phases %}
+        {% if phase.timer_data %}
+            updateCountdown('{{ phase.id }}', {{ phase.timer_data.remaining_seconds }});
+        {% endif %}
+    {% endfor %}
+}
+
+function updateCountdown(phaseId, initialSeconds) {
+    const element = document.getElementById('countdown-' + phaseId);
+    if (!element) return;
+    
+    let remainingSeconds = initialSeconds - (Math.floor((Date.now() - pageLoadTime) / 1000));
+    
+    if (remainingSeconds <= 0) {
+        element.innerHTML = 'OVERRUN';
+        element.parentElement.classList.remove('bg-warning', 'bg-normal');
+        element.parentElement.classList.add('bg-overrun');
+        
+        // Send notification to admin (only once per phase)
+        if (!element.dataset.notificationSent) {
+            sendOverrunNotification(phaseId);
+            element.dataset.notificationSent = 'true';
+        }
+        return;
+    }
+    
+    const hours = Math.floor(remainingSeconds / 3600);
+    const minutes = Math.floor((remainingSeconds % 3600) / 60);
+    
+    if (hours > 0) {
+        element.innerHTML = hours + '.' + Math.floor(minutes / 6) + 'h left';
+    } else {
+        element.innerHTML = minutes + 'm left';
+    }
+}
+
+function sendOverrunNotification(phaseId) {
+    // Send notification to admin when phase timer expires
+    fetch('{% url "dashboards:phase_timer_expired" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            'phase_id': phaseId
+        })
+    })
+    .then(response => {
+        if (response.ok) {
+            console.log('Timer expiration notification sent to admin for phase:', phaseId);
+        } else {
+            console.error('Failed to send timer notification:', response.status);
+        }
+    })
+    .catch(error => {
+        console.error('Error sending timer notification:', error);
+    });
+}
+
+// Start countdown updates
+updateCountdowns();
+setInterval(updateCountdowns, 60000); // Update every minute
 </script>
-{% endblock %}
+{% endblock content %}

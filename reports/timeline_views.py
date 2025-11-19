@@ -248,8 +248,6 @@ def enhanced_timeline_view(request, bmr_id):
             phase_duration = phase.completed_date - phase.started_date
             # Add duration in hours as a dynamic attribute to the phase object
             phase.calculated_duration_hours = round(phase_duration.total_seconds() / 3600, 2)
-            # Add total production time
-            total_production_hours += phase_duration.total_seconds() / 3600
         else:
             phase.calculated_duration_hours = None
     
@@ -506,12 +504,13 @@ def export_timeline_excel(request):
         
         phases = BatchPhaseExecution.objects.filter(bmr=bmr).select_related('phase')
         
-        # Calculate total duration
+        # Calculate total duration correctly (start to end, not sum of phases)
         total_duration = 0
-        for phase in phases:
-            if phase.started_date and phase.completed_date:
-                duration = phase.completed_date - phase.started_date
-                total_duration += duration.total_seconds() / 3600
+        first_started_phase = phases.filter(started_date__isnull=False).order_by('started_date').first()
+        last_completed_phase = phases.filter(completed_date__isnull=False).order_by('-completed_date').first()
+        
+        if first_started_phase and last_completed_phase:
+            total_duration = (last_completed_phase.completed_date - first_started_phase.started_date).total_seconds() / 3600
         
         # Find current phase
         current_phase = phases.filter(status__in=['pending', 'in_progress']).order_by('phase__phase_order').first()
@@ -569,7 +568,7 @@ def export_timeline_excel(request):
         # Product info (row 2)
         ws_detail['A2'] = f"Product Type: {bmr.product.product_type} | Created: {bmr.created_date.strftime('%Y-%m-%d %H:%M:%S') if bmr.created_date else 'N/A'}"
         
-        # Calculate total production time for this BMR
+        # Calculate total production time for this BMR correctly
         phases = BatchPhaseExecution.objects.filter(bmr=bmr).select_related('phase')
         total_production_hours = 0
         completed_phases_count = 0
@@ -579,10 +578,18 @@ def export_timeline_excel(request):
         completed_phases = phases.filter(status='completed')
         completed_phases_count = completed_phases.count()
         
-        for phase in completed_phases:
-            if phase.started_date and phase.completed_date:
-                phase_duration = phase.completed_date - phase.started_date
-                total_production_hours += phase_duration.total_seconds() / 3600
+        # Calculate correct total production time (start to end, not sum of phases)
+        first_started_phase = phases.filter(started_date__isnull=False).order_by('started_date').first()
+        last_completed_phase = phases.filter(completed_date__isnull=False).order_by('-completed_date').first()
+        
+        if first_started_phase and last_completed_phase:
+            total_duration = last_completed_phase.completed_date - first_started_phase.started_date
+            total_production_hours = total_duration.total_seconds() / 3600
+        elif first_started_phase:
+            # For in-progress BMRs, calculate from start to now
+            from django.utils import timezone
+            total_duration = timezone.now() - first_started_phase.started_date
+            total_production_hours = total_duration.total_seconds() / 3600
         
         # Format production time display
         if completed_phases_count == total_phases_count and total_phases_count > 0:

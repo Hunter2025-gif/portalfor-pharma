@@ -82,10 +82,15 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
                         <i class="fas fa-clipboard-check me-2"></i>Pending Regulatory Approvals
                     </h5>
+                    {% if pending_approvals %}
+                    <span class="badge bg-light text-dark">
+                        Page {{ pending_approvals.number }} of {{ pending_approvals.paginator.num_pages }}
+                    </span>
+                    {% endif %}
                 </div>
                 <div class="card-body">
                     {% if pending_approvals %}
@@ -93,13 +98,13 @@
                             <table class="table table-striped table-hover">
                                 <thead class="table-dark">
                                     <tr>
-                                        <th>BMR Number</th>
-                                        <th>Product</th>
-                                        <th>Product Type</th>
-                                        <th>Batch Size</th>
-                                        <th>Created Date</th>
-                                        <th>Priority</th>
-                                        <th>Actions</th>
+                                        <th width="15%">BMR Number</th>
+                                        <th width="25%">Product</th>
+                                        <th width="12%">Product Type</th>
+                                        <th width="15%">Batch Size</th>
+                                        <th width="15%">Created Date</th>
+                                        <th width="8%">Priority</th>
+                                        <th width="10%">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -113,7 +118,12 @@
                                             <span class="badge bg-secondary">{{ execution.bmr.product.get_product_type_display }}</span>
                                         </td>
                                         <td>{{ execution.bmr.batch_size|floatformat:0 }} {{ execution.bmr.product.unit_of_measure }}</td>
-                                        <td>{{ execution.bmr.created_date|date:"M d, Y H:i" }}</td>
+                                        <td>
+                                            <div class="text-muted">
+                                                {{ execution.bmr.created_date|date:"M d, Y" }}<br>
+                                                <small>{{ execution.bmr.created_date|time:"H:i" }}</small>
+                                            </div>
+                                        </td>
                                         <td>
                                             {% if execution.bmr.created_date|timesince|slice:":1" == "0" %}
                                                 <span class="badge bg-danger">Urgent</span>
@@ -126,16 +136,22 @@
                                         <td>
                                             <div class="btn-group btn-group-sm" role="group">
                                                 <a href="{% url 'bmr:detail' execution.bmr.pk %}" 
-                                                   class="btn btn-outline-primary btn-sm">
-                                                    <i class="fas fa-eye"></i> Review
+                                                   class="btn btn-outline-primary btn-sm"
+                                                   data-bs-toggle="tooltip"
+                                                   title="Review BMR Details">
+                                                    <i class="fas fa-eye"></i>
                                                 </a>
                                                 <button type="button" class="btn btn-outline-success btn-sm"
-                                                        onclick="approveRegulatory('{{ execution.bmr.pk }}')">
-                                                    <i class="fas fa-check"></i> Approve
+                                                        onclick="approveRegulatory('{{ execution.bmr.pk }}')"
+                                                        data-bs-toggle="tooltip"
+                                                        title="Approve BMR">
+                                                    <i class="fas fa-check"></i>
                                                 </button>
                                                 <button type="button" class="btn btn-outline-danger btn-sm"
-                                                        onclick="rejectRegulatory('{{ execution.bmr.pk }}')">
-                                                    <i class="fas fa-times"></i> Reject
+                                                        onclick="rejectRegulatory('{{ execution.bmr.pk }}')"
+                                                        data-bs-toggle="tooltip"
+                                                        title="Reject BMR">
+                                                    <i class="fas fa-times"></i>
                                                 </button>
                                             </div>
                                         </td>
@@ -144,6 +160,63 @@
                                 </tbody>
                             </table>
                         </div>
+                        
+                        <!-- Pagination Controls for Pending Approvals -->
+                        {% if pending_approvals.paginator.num_pages > 1 %}
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div class="pagination-info text-muted">
+                                Showing {{ pending_approvals.start_index }} to {{ pending_approvals.end_index }} 
+                                of {{ pending_approvals.paginator.count }} pending approvals
+                            </div>
+                            <nav aria-label="Pending Approvals Pagination">
+                                <ul class="pagination pagination-sm mb-0">
+                                    <!-- Previous Page -->
+                                    {% if pending_approvals.has_previous %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?approvals_page={{ pending_approvals.previous_page_number }}{% if request.GET.activities_page %}&activities_page={{ request.GET.activities_page }}{% endif %}">
+                                                <i class="fas fa-chevron-left"></i> Previous
+                                            </a>
+                                        </li>
+                                    {% else %}
+                                        <li class="page-item disabled">
+                                            <span class="page-link">
+                                                <i class="fas fa-chevron-left"></i> Previous
+                                            </span>
+                                        </li>
+                                    {% endif %}
+                                    
+                                    <!-- Page Numbers -->
+                                    {% for num in pending_approvals.paginator.page_range %}
+                                        {% if num == pending_approvals.number %}
+                                            <li class="page-item active">
+                                                <span class="page-link">{{ num }}</span>
+                                            </li>
+                                        {% else %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="?approvals_page={{ num }}{% if request.GET.activities_page %}&activities_page={{ request.GET.activities_page }}{% endif %}">{{ num }}</a>
+                                            </li>
+                                        {% endif %}
+                                    {% endfor %}
+                                    
+                                    <!-- Next Page -->
+                                    {% if pending_approvals.has_next %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?approvals_page={{ pending_approvals.next_page_number }}{% if request.GET.activities_page %}&activities_page={{ request.GET.activities_page }}{% endif %}">
+                                                Next <i class="fas fa-chevron-right"></i>
+                                            </a>
+                                        </li>
+                                    {% else %}
+                                        <li class="page-item disabled">
+                                            <span class="page-link">
+                                                Next <i class="fas fa-chevron-right"></i>
+                                            </span>
+                                        </li>
+                                    {% endif %}
+                                </ul>
+                            </nav>
+                        </div>
+                        {% endif %}
+                        
                     {% else %}
                         <div class="text-center py-5">
                             <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
@@ -160,40 +233,142 @@
     <div class="row mt-4">
         <div class="col-12">
             <div class="card">
-                <div class="card-header bg-info text-white">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
                         <i class="fas fa-history me-2"></i>Recent Regulatory Activities
                     </h5>
+                    <span class="badge bg-light text-dark">
+                        Page {{ recent_activities.number }} of {{ recent_activities.paginator.num_pages }}
+                    </span>
                 </div>
                 <div class="card-body">
                     {% if recent_activities %}
-                        <div class="timeline">
-                            {% for activity in recent_activities %}
-                            <div class="timeline-item">
-                                <div class="timeline-marker 
-                                    {% if activity.status == 'approved' %}bg-success
-                                    {% elif activity.status == 'rejected' %}bg-danger
-                                    {% else %}bg-warning{% endif %}">
-                                    <i class="fas fa-{% if activity.status == 'approved' %}check{% elif activity.status == 'rejected' %}times{% else %}clock{% endif %}"></i>
-                                </div>
-                                <div class="timeline-content">
-                                    <h6 class="mb-1">{{ activity.bmr.bmr_number }} - {{ activity.bmr.product.product_name }}</h6>
-                                    <p class="mb-1 text-muted">
-                                        {% if activity.status == 'approved' %}
-                                            <span class="text-success">Approved</span>
-                                        {% elif activity.status == 'rejected' %}
-                                            <span class="text-danger">Rejected</span>
-                                        {% else %}
-                                            <span class="text-warning">Pending Review</span>
-                                        {% endif %}
-                                    </p>
-                                    <small class="text-muted">{{ activity.completed_date|timesince }} ago</small>
-                                </div>
-                            </div>
-                            {% endfor %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th width="15%">Batch Number</th>
+                                        <th width="25%">Product Name</th>
+                                        <th width="12%">Status</th>
+                                        <th width="18%">Processed By</th>
+                                        <th width="15%">Date</th>
+                                        <th width="15%">Comments</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for activity in recent_activities %}
+                                    <tr>
+                                        <td>
+                                            <strong class="text-primary">{{ activity.bmr.batch_number }}</strong>
+                                        </td>
+                                        <td>{{ activity.bmr.product.product_name }}</td>
+                                        <td>
+                                            {% if activity.status == 'completed' %}
+                                                <span class="badge bg-success">
+                                                    <i class="fas fa-check me-1"></i>Approved
+                                                </span>
+                                            {% elif activity.status == 'failed' %}
+                                                <span class="badge bg-danger">
+                                                    <i class="fas fa-times me-1"></i>Rejected
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-warning">
+                                                    <i class="fas fa-clock me-1"></i>Pending
+                                                </span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-user-circle me-2 text-muted"></i>
+                                                <span>{{ activity.completed_by.get_full_name|default:activity.completed_by.username }}</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="text-muted">
+                                                {{ activity.completed_date|date:"M d, Y" }}<br>
+                                                <small>{{ activity.completed_date|time:"H:i" }} ({{ activity.completed_date|timesince }} ago)</small>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {% if activity.operator_comments %}
+                                                <span class="text-truncate d-inline-block" style="max-width: 150px;" 
+                                                      data-bs-toggle="tooltip" 
+                                                      data-bs-placement="top" 
+                                                      title="{{ activity.operator_comments }}">
+                                                    {{ activity.operator_comments|truncatechars:30 }}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">No comments</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         </div>
+                        
+                        <!-- Pagination Controls -->
+                        {% if recent_activities.paginator.num_pages > 1 %}
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div class="pagination-info text-muted">
+                                Showing {{ recent_activities.start_index }} to {{ recent_activities.end_index }} 
+                                of {{ recent_activities.paginator.count }} activities
+                            </div>
+                            <nav aria-label="Recent Activities Pagination">
+                                <ul class="pagination pagination-sm mb-0">
+                                    <!-- Previous Page -->
+                                    {% if recent_activities.has_previous %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?activities_page={{ recent_activities.previous_page_number }}{% if request.GET.approvals_page %}&approvals_page={{ request.GET.approvals_page }}{% endif %}">
+                                                <i class="fas fa-chevron-left"></i> Previous
+                                            </a>
+                                        </li>
+                                    {% else %}
+                                        <li class="page-item disabled">
+                                            <span class="page-link">
+                                                <i class="fas fa-chevron-left"></i> Previous
+                                            </span>
+                                        </li>
+                                    {% endif %}
+                                    
+                                    <!-- Page Numbers -->
+                                    {% for num in recent_activities.paginator.page_range %}
+                                        {% if num == recent_activities.number %}
+                                            <li class="page-item active">
+                                                <span class="page-link">{{ num }}</span>
+                                            </li>
+                                        {% else %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="?activities_page={{ num }}{% if request.GET.approvals_page %}&approvals_page={{ request.GET.approvals_page }}{% endif %}">{{ num }}</a>
+                                            </li>
+                                        {% endif %}
+                                    {% endfor %}
+                                    
+                                    <!-- Next Page -->
+                                    {% if recent_activities.has_next %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?activities_page={{ recent_activities.next_page_number }}{% if request.GET.approvals_page %}&approvals_page={{ request.GET.approvals_page }}{% endif %}">
+                                                Next <i class="fas fa-chevron-right"></i>
+                                            </a>
+                                        </li>
+                                    {% else %}
+                                        <li class="page-item disabled">
+                                            <span class="page-link">
+                                                Next <i class="fas fa-chevron-right"></i>
+                                            </span>
+                                        </li>
+                                    {% endif %}
+                                </ul>
+                            </nav>
+                        </div>
+                        {% endif %}
+                        
                     {% else %}
-                        <p class="text-muted text-center">No recent regulatory activities.</p>
+                        <div class="text-center py-5">
+                            <i class="fas fa-history fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No Recent Regulatory Activities</h5>
+                            <p class="text-muted">Recent approvals and rejections will appear here.</p>
+                        </div>
                     {% endif %}
                 </div>
             </div>
@@ -258,34 +433,52 @@
 </div>
 
 <style>
-.timeline {
-    position: relative;
-    padding-left: 30px;
+.pagination-info {
+    font-size: 0.9rem;
 }
 
-.timeline-item {
-    position: relative;
-    margin-bottom: 20px;
-}
-
-.timeline-marker {
-    position: absolute;
-    left: -35px;
-    top: 0;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.table th {
+    background-color: #343a40;
     color: white;
+    border-color: #495057;
+    font-weight: 500;
 }
 
-.timeline-content {
-    background: #f8f9fa;
-    padding: 15px;
-    border-radius: 5px;
-    border-left: 3px solid #007bff;
+.table-responsive {
+    border-radius: 0.375rem;
+    overflow: hidden;
+}
+
+.badge {
+    font-size: 0.75em;
+}
+
+.pagination-sm .page-link {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+.text-truncate {
+    cursor: help;
+}
+
+/* Hover effects for table rows */
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+/* Status badge styling */
+.badge.bg-success {
+    background-color: #198754 !important;
+}
+
+.badge.bg-danger {
+    background-color: #dc3545 !important;
+}
+
+.badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #000 !important;
 }
 </style>
 
@@ -299,6 +492,14 @@ function rejectRegulatory(bmrId) {
     document.getElementById('rejection_bmr_id').value = bmrId;
     new bootstrap.Modal(document.getElementById('rejectionModal')).show();
 }
+
+// Initialize tooltips for comments
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
 
 // Handle form submissions
 document.getElementById('approvalForm').addEventListener('submit', function(e) {

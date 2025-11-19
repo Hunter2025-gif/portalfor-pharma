@@ -458,29 +458,34 @@ def bmr_comments_detail(request, bmr_id):
     is_admin = request.user.is_staff or request.user.is_superuser or request.user.role == 'admin'
     
     if not is_admin:
-        # Non-admin users can only view BMRs they created or were involved in
-        user_bmrs = BMR.objects.filter(
-            Q(created_by=request.user) | 
-            Q(approved_by=request.user)
-        )
-        
-        # Also check if user was involved in any phases of this BMR
-        user_phases = BatchPhaseExecution.objects.filter(
-            Q(started_by=request.user) | Q(completed_by=request.user),
-            bmr=bmr
-        )
-        
-        # Also check signatures
-        user_signatures = BMRSignature.objects.filter(
-            bmr=bmr,
-            signed_by=request.user
-        )
-        
-        # If user has no connection to this BMR, deny access
-        if not (bmr in user_bmrs or user_phases.exists() or user_signatures.exists()):
-            from django.contrib import messages
-            messages.error(request, 'Access denied. You can only view BMRs you were involved in.')
-            return redirect('reports:comments_report')
+        # Operators can view BMRs in production states, others need involvement
+        if bmr.status in ['approved', 'in_production', 'completed']:
+            # Allow access to BMRs in production states for all authenticated users
+            pass
+        else:
+            # For non-production BMRs, check user involvement
+            user_bmrs = BMR.objects.filter(
+                Q(created_by=request.user) | 
+                Q(approved_by=request.user)
+            )
+            
+            # Also check if user was involved in any phases of this BMR
+            user_phases = BatchPhaseExecution.objects.filter(
+                Q(started_by=request.user) | Q(completed_by=request.user),
+                bmr=bmr
+            )
+            
+            # Also check signatures
+            user_signatures = BMRSignature.objects.filter(
+                bmr=bmr,
+                signed_by=request.user
+            )
+            
+            # If user has no connection to this BMR, deny access
+            if not (bmr in user_bmrs or user_phases.exists() or user_signatures.exists()):
+                from django.contrib import messages
+                messages.error(request, 'Access denied. You can only view BMRs you were involved in.')
+                return redirect('reports:comments_report')
     
     # Collect all comments for this BMR
     comments = []

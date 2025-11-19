@@ -18,6 +18,12 @@ from django.contrib import admin
 from django.urls import path, include
 from dashboards.views import dashboard_home
 
+# Import comprehensive API configuration
+try:
+    from .api_config import api_urlpatterns
+except ImportError:
+    api_urlpatterns = []
+
 urlpatterns = [
     path('', dashboard_home, name='home'),
     path('admin/', admin.site.urls),
@@ -27,10 +33,11 @@ urlpatterns = [
     path('quarantine/', include('quarantine.urls', namespace='quarantine')),
     path('reports/', include('reports.urls', namespace='reports')),
     path('fgs/', include('fgs_management.urls', namespace='fgs_management')),
-    # API URLs
+    
+    # Comprehensive API for integrations
+    path('api/v1/', include(api_urlpatterns)),
+    
+    # Legacy API endpoints (kept for backward compatibility)
     path('api/bmr/', include('bmr.urls', namespace='bmr_api')),
     path('api/', include('products.urls')),
-    # path('api/', include('workflow.urls')),
-    # path('api/', include('dashboards.urls')),
-    # path('api/', include('products.urls')),
 ]

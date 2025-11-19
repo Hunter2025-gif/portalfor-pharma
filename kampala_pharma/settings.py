@@ -40,6 +40,24 @@ INSTALLED_APPS = [
     'fgs_management',
 ]
 
+# Add optional security and integration features if available
+OPTIONAL_APPS = [
+    'django_otp',
+    'django_otp.plugins.otp_totp', 
+    'django_otp.plugins.otp_static',
+    'channels',
+]
+
+# Check and add available optional apps
+for app in OPTIONAL_APPS:
+    try:
+        __import__(app)
+        INSTALLED_APPS.append(app)
+        print(f"✅ {app} - Available")
+    except ImportError:
+        print(f"⚠️  {app} - Not installed (optional)")
+
+# Add OTP middleware only if django_otp is available
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -47,10 +65,16 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+]
+
+if 'django_otp' in INSTALLED_APPS:
+    MIDDLEWARE.append('django_otp.middleware.OTPMiddleware')  # 2FA support
+    
+MIDDLEWARE.extend([
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-
-    'accounts.middleware.session_timeout.SessionTimeoutMiddleware',]
+    # 'accounts.middleware.session_timeout.SessionTimeoutMiddleware',  # TEMPORARILY DISABLED - CAUSING LOGIN ISSUES
+])
 
 ROOT_URLCONF = 'kampala_pharma.urls'
 
@@ -65,6 +89,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'dashboards.context_processors.admin_settings_context',  # Add admin settings context
             ],
         },
     },
@@ -180,3 +205,216 @@ BATCH_NUMBER_YEAR_LENGTH = 4
 
 # Session timeout setting (12 hours = 43200 seconds)
 SESSION_TIMEOUT = 43200
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs' / 'django.log',
+            'formatter': 'verbose',
+        },
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'workflow': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'dashboards': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+# =============================================================================
+# ENHANCED FEATURES FOR CLOUD DEPLOYMENT
+# =============================================================================
+
+# Environment Configuration Support
+try:
+    import environ
+    env = environ.Env(
+        DEBUG=(bool, True),
+        SECRET_KEY=(str, 'django-insecure-kampala-pharma-development-key-change-in-production'),
+        DATABASE_URL=(str, ''),
+        ALLOWED_HOSTS=(list, ['*']),
+        USE_2FA=(bool, False),
+        REDIS_URL=(str, 'redis://localhost:6379'),
+    )
+
+    # Read .env file if it exists (for production deployment)
+    env_file = BASE_DIR / '.env'
+    if env_file.exists():
+        environ.Env.read_env(env_file)
+        
+    # 2FA is optional by default, can be enabled via environment variable
+    USE_TWO_FACTOR_AUTH = env('USE_2FA')
+    
+except ImportError:
+    print("⚠️  django-environ not installed - using default settings")
+    USE_TWO_FACTOR_AUTH = False
+    env = lambda key, default=None: os.environ.get(key, default)
+
+# Two-Factor Authentication Configuration  
+OTP_TOTP_ISSUER = 'KPI Operations System'
+OTP_LOGIN_URL = '/accounts/login/'
+
+# API Configuration
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 50,
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ]
+}
+
+# Channels Configuration (WebSocket support) - Optional
+try:
+    import channels
+    ASGI_APPLICATION = 'kampala_pharma.asgi.application'
+    
+    # Redis configuration for channels (WebSocket) and caching
+    REDIS_URL = env('REDIS_URL')
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [REDIS_URL],
+            },
+        },
+    }
+    
+    # Caching Configuration
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': REDIS_URL,
+            'KEY_PREFIX': 'kpi_ops',
+            'TIMEOUT': 300,  # 5 minutes default timeout
+        }
+    }
+    
+    # Session Configuration for Cloud Deployment
+    SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+    SESSION_CACHE_ALIAS = 'default'
+    
+except ImportError:
+    print("⚠️  Redis/Channels not available - using default cache")
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    }
+    SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_AGE = 86400  # 24 hours
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = not DEBUG  # Secure cookies in production
+SESSION_COOKIE_SAMESITE = 'Lax'
+
+# Security Settings for Production
+if not DEBUG:
+    # HTTPS Settings
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    
+    # SSL Settings
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    
+    # Additional Security
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+# CORS Configuration for API Access
+CORS_ALLOWED_ORIGINS = [
+    "https://localhost:3000",
+    "https://127.0.0.1:3000",
+    # Add production domains here
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
+# API Rate Limiting (can be configured via environment)
+API_THROTTLE_RATE = env('API_THROTTLE_RATE', default='1000/hour')
+
+# Email Configuration for Production Notifications
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = env('EMAIL_HOST', default='localhost')
+EMAIL_PORT = env('EMAIL_PORT', default=587)
+EMAIL_USE_TLS = env('EMAIL_USE_TLS', default=True)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@kpiops.com')
+
+# Integration Settings
+INTEGRATION_SETTINGS = {
+    'api_enabled': True,
+    'websocket_enabled': 'channels' in INSTALLED_APPS,
+    'real_time_updates': True,
+    'export_formats': ['xlsx', 'csv', 'pdf'],
+    'max_file_size': 50 * 1024 * 1024,  # 50MB
+}
+
+# Pharmaceutical Compliance Settings
+PHARMACEUTICAL_SETTINGS = {
+    'electronic_signatures_required': True,
+    'audit_trail_retention_days': 2555,  # 7 years
+    'gmp_compliance_mode': True,
+    'data_integrity_checks': True,
+    'change_control_required': not DEBUG,
+}
+
+# System Version for API
+SYSTEM_VERSION = '2.0.0'
+SYSTEM_BUILD = 'enterprise-ready'
+
+print("🚀 KPI Operations System - Enhanced Configuration Loaded")
+if USE_TWO_FACTOR_AUTH:
+    print("🔐 Two-Factor Authentication: ENABLED")
+if 'channels' in INSTALLED_APPS:
+    print("⚡ Real-time Features: READY")
+print("🔌 API Framework: ENABLED")
+print("🛡️  Security: ENHANCED")

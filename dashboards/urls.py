@@ -23,6 +23,12 @@ urlpatterns = [
     # Generic Operator Dashboard
     path('operator/', views.operator_dashboard, name='operator_dashboard'),
     
+    # Phase Notifications & Timing
+    path('phase-notifications/', views.phase_notifications_view, name='phase_notifications'),
+    
+    # System Logs Viewer (Admin/QA access)
+    path('system-logs/', views.system_logs_viewer, name='system_logs'),
+    
     # Production Operator Dashboards
     path('mixing/', views.mixing_dashboard, name='mixing_dashboard'),
     path('granulation/', views.granulation_dashboard, name='granulation_dashboard'),
@@ -48,10 +54,9 @@ urlpatterns = [
     path('admin-overview/', views.admin_dashboard, name='admin_dashboard'),
     path('admin/timeline/', views.admin_timeline_view, name='admin_timeline'),
     path('admin/fgs-monitor/', views.admin_fgs_monitor, name='admin_fgs_monitor'),
-    path('admin/quarantine-monitor/', views.quarantine_monitor_view, name='quarantine_monitor'),
     path('admin/export-timeline/', views.export_timeline_data, name='export_timeline_data'),
     path('admin/live-tracking/', views.live_tracking_view, name='live_tracking'),
-    path('export-wip/', views.export_wip, name='export_wip'),
+    # path('export-wip/', views.export_wip, name='export_wip'),  # Commented out - missing view function
     
     # Admin section routes for direct URL links
     path('machine-management/', views.admin_machine_management, name='machine_management'),
@@ -59,5 +64,25 @@ urlpatterns = [
     path('inventory/', views.admin_inventory, name='inventory'),
     path('user-management/', views.admin_user_management, name='user_management'),
     path('system-health/', views.admin_system_health, name='system_health'),
-    path('export-wip/', views.export_wip, name='export_wip'),
+    
+    # Notification API endpoints
+    path('api/notification-counts/', views.notification_counts_api, name='notification_counts_api'),
+    path('api/notifications-feed/', views.notifications_feed_api, name='notifications_feed_api'),
+    path('api/overrun-alerts/', views.overrun_alerts_api, name='overrun_alerts_api'),
+    path('api/notifications/<int:notification_id>/mark-read/', views.mark_notification_read_api, name='mark_notification_read_api'),
+    path('api/notifications/<int:notification_id>/dismiss/', views.dismiss_notification_api, name='dismiss_notification_api'),
+    path('api/request-explanation/', views.request_explanation_api, name='request_explanation_api'),
+    path('api/request-all-explanations/', views.request_all_explanations_api, name='request_all_explanations_api'),
+    
+    # Timer expiration notification
+    path('api/phase-timer-expired/', views.phase_timer_expired_api, name='phase_timer_expired'),
+    
+    # Monthly Production Analytics API
+    path('api/monthly-production-analytics/', views.monthly_production_analytics_api, name='monthly_production_analytics_api'),
+    
+    # Excel Export
+    path('export/monthly-production-excel/', views.export_monthly_production_excel, name='export_monthly_production_excel'),
+    
+    # Detailed Product Breakdown API
+    path('api/detailed-product-breakdown/', views.get_detailed_product_breakdown_api, name='detailed_product_breakdown_api'),
 ]

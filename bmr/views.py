@@ -136,11 +136,11 @@ def bmr_list_view(request):
         # Regulatory can see BMRs pending approval or approved
         bmrs = bmrs.filter(status__in=['pending_approval', 'approved'])
     elif request.user.role == 'qc':
-        # QC can see approved BMRs
-        bmrs = bmrs.filter(status='approved')
+        # QC can see BMRs in production states
+        bmrs = bmrs.filter(status__in=['approved', 'in_production', 'completed'])
     else:
-        # Operators can see approved BMRs
-        bmrs = bmrs.filter(status='approved')
+        # Operators can see BMRs in production states
+        bmrs = bmrs.filter(status__in=['approved', 'in_production', 'completed'])
     
     return render(request, 'bmr/bmr_list.html', {
         'bmrs': bmrs,
@@ -153,8 +153,9 @@ def bmr_detail_view(request, bmr_id):
     bmr = get_object_or_404(BMR.objects.select_related('product', 'created_by', 'approved_by'), id=bmr_id)
     
     # Check permissions - Admin, QA, Regulatory, and QC can view all BMRs
-    # Other users can only view approved BMRs
-    if not (request.user.is_staff or request.user.role in ['qa', 'regulatory', 'qc'] or bmr.status == 'approved'):
+    # Other users can view BMRs in production states (approved, in_production, completed)
+    allowed_statuses_for_operators = ['approved', 'in_production', 'completed']
+    if not (request.user.is_staff or request.user.role in ['qa', 'regulatory', 'qc'] or bmr.status in allowed_statuses_for_operators):
         messages.error(request, 'You do not have permission to view this BMR')
         return redirect('home')
     
@@ -179,11 +180,25 @@ def bmr_detail_view(request, bmr_id):
     total_phases = phase_executions.count()
     completed_count = completed_phases.count()
     
-    # Calculate based on completed phases only
-    for phase in completed_phases:
-        if phase.started_date and phase.completed_date:
-            phase_duration = phase.completed_date - phase.started_date
-            total_production_hours += phase_duration.total_seconds() / 3600
+    # Calculate total production time correctly (start to end, not sum of individual phases)
+    # Find first started phase and last completed phase
+    first_started_phase = phase_executions.filter(
+        started_date__isnull=False
+    ).order_by('started_date').first()
+    
+    last_completed_phase = phase_executions.filter(
+        completed_date__isnull=False
+    ).order_by('-completed_date').first()
+    
+    # Calculate actual total production time
+    if first_started_phase and last_completed_phase:
+        total_duration = last_completed_phase.completed_date - first_started_phase.started_date
+        total_production_hours = total_duration.total_seconds() / 3600
+    elif first_started_phase:
+        # For in-progress batches, calculate from first start to now
+        from django.utils import timezone
+        total_duration = timezone.now() - first_started_phase.started_date
+        total_production_hours = total_duration.total_seconds() / 3600
     
     # Format production time display - FIXED logic
     if completed_count == total_phases and total_phases > 0:

@@ -1,10 +1,33 @@
 {% extends 'dashboards/dashboard_base.html' %}
 {% load static %}
+{% load dashboard_permissions %}
+{% load dashboard_permissions %}
 
 {% block title %}Admin Dashboard - Kampala Pharmaceutical Industries{% endblock %}
 
+{% csrf_token %}
+
 {% block extra_css %}
 <style>
+    /* ========== NAVBAR FIXED POSITIONING FIX ========== */
+    
+    /* Force navbar to stay fixed at top - cannot scroll away */
+    .navbar.fixed-top {
+        position: fixed !important;
+        top: 0 !important;
+        z-index: 1030 !important;
+        width: 100% !important;
+        left: 0 !important;
+    }
+    
+    /* Clean body styles for dashboard - eliminate scrollbar conflicts */
+    body {
+        padding-top: 56px !important;
+        margin: 0 !important;
+        overflow: hidden !important; /* Force single scroll system */
+        height: 100vh !important;
+    }
+    
     /* ========== UNIFIED ADMIN DASHBOARD STYLES ========== */
     
     /* Admin Section Display Rules - Removed display: none to prevent conflicts */
@@ -24,6 +47,17 @@
         background-color: #fff;
         border-radius: 8px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        display: none; /* Default hidden */
+        visibility: hidden;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    /* Make active sections visible with important to override any conflicting styles */
+    .content-section.active {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
     }
     
     /* BMR Collapsible Styles */
@@ -35,14 +69,17 @@
         transform: rotate(180deg);
     }
     
-    /* Main Layout */
+    /* Main Layout - Single Scroll Dashboard */
     .admin-dashboard {
-        display: flex;
-        min-height: calc(100vh - 56px);
+        position: relative;
         background-color: #f8f9fa;
+        margin: 0;
+        padding: 0;
+        height: calc(100vh - 56px);
+        overflow: hidden;
     }
     
-    /* Fixed Sidebar */
+    /* Fixed Sidebar - No independent scrolling */
     .admin-sidebar {
         width: 280px;
         background-color: #0056b3;
@@ -51,19 +88,31 @@
         height: calc(100vh - 56px);
         top: 56px;
         left: 0;
-        overflow-y: auto;
-        z-index: 100;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        overflow: hidden; /* Remove sidebar scroll completely */
+        z-index: 99;
+        box-shadow: 2px 0 4px rgba(0,0,0,0.1);
         transition: all 0.3s ease;
     }
     
-    /* Main Content Area */
+    /* Sidebar content with internal scroll only if absolutely needed */
+    .admin-sidebar .sidebar-content {
+        height: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding-bottom: 20px;
+    }
+    
+    /* Main Content Area - Single controlled scroll */
     .admin-content {
-        margin-left: 280px;
-        flex: 1;
+        position: absolute;
+        left: 280px;
+        top: 0;
+        right: 0;
+        bottom: 0;
         padding: 20px;
         background-color: #f8f9fa;
-        transition: all 0.3s ease;
+        overflow-y: auto;
+        overflow-x: hidden;
     }
     
     /* Content Sections */
@@ -199,6 +248,52 @@
         opacity: 0.8;
     }
     
+    /* Enhanced styles for clickable metric cards */
+    .clickable-metric {
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .clickable-metric::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        transition: left 0.5s;
+    }
+    
+    .clickable-metric:hover::before {
+        left: 100%;
+    }
+    
+    .clickable-metric:hover {
+        transform: translateY(-8px) scale(1.02);
+        box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+    }
+    
+    .clickable-metric:active {
+        transform: translateY(-5px) scale(1.01);
+        transition: all 0.1s ease;
+    }
+    
+    /* Add a subtle click indicator */
+    .clickable-metric::after {
+        content: '👆';
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        font-size: 12px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .clickable-metric:hover::after {
+        opacity: 0.6;
+    }
+    
     /* Clickable QC Test Cards */
     .clickable-card {
         position: relative;
@@ -318,6 +413,8 @@
             transform: translateX(-100%);
             position: fixed;
             z-index: 1000;
+            height: calc(100vh - 56px);
+            top: 56px;
         }
         
         .admin-sidebar.active {
@@ -327,6 +424,11 @@
         .admin-content {
             margin-left: 0;
             width: 100%;
+            height: calc(100vh - 56px);
+        }
+        
+        .admin-dashboard {
+            overflow: visible; /* Allow mobile scrolling */
         }
         
         .mobile-toggle {
@@ -352,6 +454,33 @@
         font-size: 0.75rem;
         padding: 5px 10px;
         border-radius: 20px;
+    }
+    
+    /* Notification Badges */
+    .notification-badge, .overrun-badge {
+        background-color: #dc3545;
+        color: white;
+        font-size: 0.65rem;
+        font-weight: bold;
+        padding: 2px 6px;
+        border-radius: 10px;
+        margin-left: 8px;
+        min-width: 18px;
+        text-align: center;
+        display: inline-block;
+        animation: pulse 2s infinite;
+    }
+    
+    .notification-badge:empty, .overrun-badge:empty {
+        display: none;
+    }
+    
+    .notification-badge {
+        background-color: #ff6b6b;
+    }
+    
+    .overrun-badge {
+        background-color: #ff9f43;
     }
     
     /* Progress bars */
@@ -392,14 +521,15 @@
     
     <!-- Fixed Sidebar -->
     <nav class="admin-sidebar" id="adminSidebar">
-        <!-- Sidebar Header -->
-        <div class="sidebar-header">
-            <h4>Admin Control Center</h4>
-            <div class="subtitle">Pharmaceutical Operations</div>
-        </div>
-        
-        <!-- Dashboard Overview Section -->
-        <div class="sidebar-section">Overview</div>
+        <div class="sidebar-content">
+            <!-- Sidebar Header -->
+            <div class="sidebar-header">
+                <h4>Admin Control Center</h4>
+                <div class="subtitle">Pharmaceutical Operations</div>
+            </div>
+            
+            <!-- Dashboard Overview Section -->
+            <div class="sidebar-section">Overview</div>
         <ul class="sidebar-menu">
             <li>
                 <a href="#" data-section="dashboard-overview" class="section-link active" id="dashboard-overview-link">
@@ -414,18 +544,30 @@
         </ul>
         
         <!-- Production Management Section -->
+        {% has_dashboard_permission user 'bmr_tracking' as can_access_bmr_tracking %}
+        {% has_dashboard_permission user 'live_tracking' as can_access_live_tracking %}
+        {% has_dashboard_permission user 'analytics_metrics' as can_access_analytics %}
+        {% has_dashboard_permission user 'machine_management' as can_access_machine_mgmt %}
+        {% has_dashboard_permission user 'quality_control' as can_access_quality_control %}
+        {% has_dashboard_permission user 'inventory' as can_access_inventory %}
+        
+        {% if can_access_bmr_tracking or can_access_live_tracking or can_access_analytics or can_access_machine_mgmt or can_access_quality_control or can_access_inventory %}
         <div class="sidebar-section">Production Management</div>
         <ul class="sidebar-menu">
+            {% if can_access_bmr_tracking %}
             <li>
                 <a href="#" data-section="bmr-tracking" class="section-link" id="bmr-tracking-link">
                     <i class="fas fa-clipboard-list"></i> BMR Timeline Tracking
                 </a>
             </li>
+            {% endif %}
+            {% if can_access_live_tracking %}
             <li>
                 <a href="#" data-section="live-tracking" class="section-link" id="live-tracking-link">
                     <i class="fas fa-broadcast-tower"></i> Live BMR Tracking
                 </a>
             </li>
+            {% endif %}
             <li>
                 <a href="#" data-section="active-phases" class="section-link" id="active-phases-link">
                     <i class="fas fa-play-circle"></i> Active Phases Monitor
@@ -436,69 +578,90 @@
                     <i class="fas fa-industry"></i> Work in Progress
                 </a>
             </li>
+            {% if can_access_machine_mgmt %}
             <li>
                 <a href="/dashboard/machine-management/" id="machine-mgmt-link">
                     <i class="fas fa-cogs"></i> Machine Management
                 </a>
             </li>
+            {% endif %}
+            {% if can_access_quality_control %}
             <li>
                 <a href="/dashboard/quality-control/" id="quality-control-link">
                     <i class="fas fa-microscope"></i> Quality Control
                 </a>
             </li>
+            {% endif %}
+            {% if can_access_inventory %}
             <li>
                 <a href="/dashboard/inventory/" id="inventory-link">
                     <i class="fas fa-boxes"></i> Inventory & FGS
                 </a>
             </li>
+            {% endif %}
         </ul>
+        {% endif %}
         
         <!-- Quarantine Tracking Section -->
+        {% has_dashboard_permission user 'quarantine_tracking' as can_access_quarantine %}
+        
+        {% if can_access_quarantine %}
         <div class="sidebar-section">Quarantine Tracking</div>
         <ul class="sidebar-menu">
-            <li>
-                <a href="/dashboard/admin/quarantine-monitor/" id="quarantine-monitor-link">
-                    <i class="fas fa-shield-virus"></i> Quarantine Monitor
-                </a>
-            </li>
             <li>
                 <a href="/quarantine/" id="recent-quarantines-link">
                     <i class="fas fa-vials"></i> Recent Quarantines
                 </a>
             </li>
         </ul>
+        {% endif %}
+        
+        <!-- Notifications & Alerts Section -->
+        {% has_dashboard_permission user 'phase_notifications' as can_access_notifications %}
+        
+        {% if can_access_notifications %}
+        <div class="sidebar-section">Notifications & Alerts</div>
+        <ul class="sidebar-menu">
+            <li>
+                <a href="{% url 'dashboards:phase_notifications' %}">
+                    <i class="fas fa-clock"></i> Phase Timing Alerts
+                </a>
+            </li>
+        </ul>
+        {% endif %}
         
         <!-- System Administration Section -->
+        {% has_dashboard_permission user 'user_management' as can_access_user_mgmt %}
+        {% has_dashboard_permission user 'system_health' as can_access_system_health %}
+        {% has_dashboard_permission user 'system_logs' as can_access_system_logs %}
+        
+        {% if can_access_user_mgmt or can_access_system_health or can_access_system_logs %}
         <div class="sidebar-section">System Administration</div>
         <ul class="sidebar-menu">
+            {% if can_access_user_mgmt %}
             <li>
                 <a href="/dashboard/user-management/" id="user-mgmt-link">
                     <i class="fas fa-users"></i> User Management
                 </a>
             </li>
+            {% endif %}
+            {% if can_access_system_health %}
             <li>
                 <a href="/dashboard/system-health/" id="system-health-link">
                     <i class="fas fa-heartbeat"></i> System Health
                 </a>
             </li>
-        </ul>
-        
-        <!-- Reports & Export Section -->
-        <div class="sidebar-section">Reports & Export</div>
-        <ul class="sidebar-menu">
+            {% endif %}
+            {% if can_access_system_logs %}
             <li>
-                <a href="{% url 'reports:timeline_list' %}" target="_blank" rel="noopener">
-                    <i class="fas fa-project-diagram"></i> Visual Timeline
-                    
+                <a href="{% url 'dashboards:system_logs' %}" id="system-logs-link">
+                    <i class="fas fa-file-alt"></i> System Logs
                 </a>
             </li>
-            <li>
-                <a href="{% url 'reports:comments_report' %}" target="_blank" rel="noopener">
-                    <i class="fas fa-comments"></i> Comments Report
-            
-                </a>
-            </li>
+            {% endif %}
         </ul>
+        {% endif %}
+        </div> <!-- End .sidebar-content -->
     </nav>
     
     <!-- Main Content Area -->
@@ -513,28 +676,28 @@
             <!-- Key Metrics Cards -->
             <div class="row mb-4">
                 <div class="col-lg-3 col-md-6 mb-3">
-                    <div class="stats-card bg-primary text-white">
+                    <div class="stats-card bg-primary text-white clickable-metric" data-target="bmr-tracking" style="cursor: pointer;">
                         <i class="fas fa-clipboard-list"></i>
                         <div class="metric-value">{{ total_bmrs|default:0 }}</div>
                         <div class="metric-label">Total BMRs</div>
                     </div>
                 </div>
                 <div class="col-lg-3 col-md-6 mb-3">
-                    <div class="stats-card bg-warning text-dark">
+                    <div class="stats-card bg-warning text-dark clickable-metric" data-target="active-phases" data-filter="active" style="cursor: pointer;">
                         <i class="fas fa-play-circle"></i>
                         <div class="metric-value">{{ active_batches|default:0 }}</div>
                         <div class="metric-label">Active Batches</div>
                     </div>
                 </div>
                 <div class="col-lg-3 col-md-6 mb-3">
-                    <div class="stats-card bg-success text-white">
+                    <div class="stats-card bg-success text-white clickable-metric" data-target="work-in-progress" data-filter="completed" style="cursor: pointer;">
                         <i class="fas fa-check-circle"></i>
                         <div class="metric-value">{{ completed_batches|default:0 }}</div>
                         <div class="metric-label">Completed Batches</div>
                     </div>
                 </div>
                 <div class="col-lg-3 col-md-6 mb-3">
-                    <div class="stats-card bg-danger text-white">
+                    <div class="stats-card bg-danger text-white clickable-metric" data-target="work-in-progress" data-filter="rejected" style="cursor: pointer;">
                         <i class="fas fa-times-circle"></i>
                         <div class="metric-value">{{ rejected_batches|default:0 }}</div>
                         <div class="metric-label">Rejected Batches</div>
@@ -616,6 +779,147 @@
                 <p class="section-subtitle">Detailed analytics and performance metrics</p>
             </div>
             
+            <!-- Month Selection Controls -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-calendar-alt"></i> Monthly Production Analytics</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-3">
+                                    <label for="month" class="form-label">Select Month:</label>
+                                    <select class="form-select" name="month" id="month">
+                                        <option value="1" {% if selected_month == 1 %}selected{% endif %}>January</option>
+                                        <option value="2" {% if selected_month == 2 %}selected{% endif %}>February</option>
+                                        <option value="3" {% if selected_month == 3 %}selected{% endif %}>March</option>
+                                        <option value="4" {% if selected_month == 4 %}selected{% endif %}>April</option>
+                                        <option value="5" {% if selected_month == 5 %}selected{% endif %}>May</option>
+                                        <option value="6" {% if selected_month == 6 %}selected{% endif %}>June</option>
+                                        <option value="7" {% if selected_month == 7 %}selected{% endif %}>July</option>
+                                        <option value="8" {% if selected_month == 8 %}selected{% endif %}>August</option>
+                                        <option value="9" {% if selected_month == 9 %}selected{% endif %}>September</option>
+                                        <option value="10" {% if selected_month == 10 %}selected{% endif %}>October</option>
+                                        <option value="11" {% if selected_month == 11 %}selected{% endif %}>November</option>
+                                        <option value="12" {% if selected_month == 12 %}selected{% endif %}>December</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="year" class="form-label">Select Year:</label>
+                                    <select class="form-select" name="year" id="year">
+                                        <option value="2023" {% if selected_year == 2023 %}selected{% endif %}>2023</option>
+                                        <option value="2024" {% if selected_year == 2024 %}selected{% endif %}>2024</option>
+                                        <option value="2025" {% if selected_year == 2025 %}selected{% endif %}>2025</option>
+                                        <option value="2026" {% if selected_year == 2026 %}selected{% endif %}>2026</option>
+                                        <option value="2027" {% if selected_year == 2027 %}selected{% endif %}>2027</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <button type="button" class="btn btn-primary" id="viewAnalyticsBtn">
+                                        <i class="fas fa-search"></i> View Analytics
+                                    </button>
+                                </div>
+                                <div class="col-md-3">
+                                    <button type="button" class="btn btn-success" onclick="exportToExcel()">
+                                        <i class="fas fa-file-excel"></i> Export to Excel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Monthly Production Overview -->
+            <div class="row mb-4">
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <div class="stats-card bg-primary text-white">
+                        <div class="metric-value" id="total-batches-metric">{{ selected_month_analytics.total_batches_completed|default:0 }}</div>
+                        <div class="metric-label">Batches Completed</div>
+                        <small class="analytics-month-year">{{ selected_month_analytics.month_name }} {{ selected_month_analytics.year }}</small>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <div class="stats-card bg-success text-white">
+                        <div class="metric-value" id="production-efficiency-metric">{{ selected_month_analytics.production_efficiency|default:0 }}%</div>
+                        <div class="metric-label">Production Efficiency</div>
+                        <small>Completed vs Started</small>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <div class="stats-card bg-info text-white">
+                        <div class="metric-value" id="avg-cycle-time-metric">{{ selected_month_analytics.avg_cycle_time_days|default:0 }} days</div>
+                        <div class="metric-label">Avg Cycle Time</div>
+                        <small>BMR to FGS</small>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <div class="stats-card bg-warning text-dark">
+                        <div class="metric-value">
+                            {% for product_type, data in current_month_totals.items %}
+                                {% if forloop.first %}{{ data.units|floatformat:0 }}{% endif %}
+                            {% empty %}0{% endfor %}
+                        </div>
+                        <div class="metric-label">Total Units (Current Month)</div>
+                        <small>All product types</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Product Type Breakdown for Selected Month -->
+            <div class="row mb-4">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6><i class="fas fa-chart-pie"></i> Production by Product Type - {{ selected_month_analytics.month_name }} {{ selected_month_analytics.year }}</h6>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="monthlyProductionChart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6><i class="fas fa-list"></i> Production Summary</h6>
+                        </div>
+                        <div class="card-body">
+                            {% if selected_month_analytics.product_breakdown %}
+                                {% for product_type, data in selected_month_analytics.product_breakdown.items %}
+                                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded product-type-card" 
+                                         style="cursor: pointer; transition: all 0.3s ease;" 
+                                         data-product="{{ product_type }}"
+                                         data-batches="{{ data.batches }}"
+                                         data-total-units="{{ data.total_units|floatformat:0 }}"
+                                         onmouseover="this.style.backgroundColor='#e3f2fd'; this.style.transform='translateX(5px)';"
+                                         onmouseout="this.style.backgroundColor=''; this.style.transform='';">
+                                        <div>
+                                            <strong>{{ product_type|title }}s</strong><br>
+                                            <small class="text-muted batch-count">{{ data.batches }} batch{{ data.batches|pluralize:"es" }}</small>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="h6 mb-0 unit-count">{{ data.total_units|floatformat:0 }}</div>
+                                            <small class="text-muted">units</small>
+                                        </div>
+                                        <div class="ms-2">
+                                            <i class="fas fa-chevron-right text-muted"></i>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-muted text-center">No production data for selected month</p>
+                            {% endif %}
+                            <div class="mt-3">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle"></i> Click on a product type to see detailed breakdown
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Production Metrics -->
             <div class="row mb-4">
                 <div class="col-lg-6 mb-4">
@@ -628,6 +932,20 @@
                     <div class="chart-container">
                         <h5>Quality Control Pass Rates</h5>
                         <canvas id="qcPassRateChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Daily Production for Selected Month -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6><i class="fas fa-chart-line"></i> Daily Production - {{ selected_month_analytics.month_name }} {{ selected_month_analytics.year }}</h6>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="dailyProductionChart" width="400" height="150"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1329,271 +1647,124 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Quarantine Monitoring Section -->
-        <div class="content-section admin-section" id="quarantine-monitor" style="display: none;">
-            <div class="mb-4">
-                <h1 class="section-title">Quarantine Monitoring</h1>
-                <button onclick="emergencyShowQuarantineOnly()" class="btn btn-danger btn-sm position-absolute top-0 end-0 m-3">
-                    <i class="fas fa-exclamation-triangle"></i> Emergency Fix Display
-                </button>
-                <p class="section-subtitle">Monitor quarantine batches and sample processing timeline</p>
-                <div class="alert alert-info mb-3">
-                    <h5><i class="fas fa-info-circle"></i> Quarantine Data Status</h5>
-                    <button onclick="checkQuarantineData()" class="btn btn-primary btn-sm">Check Data Status</button>
-                    <button onclick="emergencyShowQuarantineOnly()" class="btn btn-warning btn-sm">Force Show Section</button>
-                    <div id="quarantine-data-status" class="mt-2"></div>
-                </div>
-            </div>
-            
-            <!-- Quarantine Stats -->
-            <div class="row mb-4">
-                <div class="col-lg-3 col-md-6 mb-3">
-                    <div class="stats-card bg-info text-white">
-                        <div class="metric-value">{{ quarantine_stats.total_quarantine_batches|default:0 }}</div>
-                        <div class="metric-label">Total Quarantine Batches</div>
-                    </div>
-                </div>
-                <div class="col-lg-3 col-md-6 mb-3">
-                    <div class="stats-card bg-warning text-dark">
-                        <div class="metric-value">{{ quarantine_stats.pending_qa_samples|default:0 }}</div>
-                        <div class="metric-label">Pending QA Samples</div>
-                    </div>
-                </div>
-                <div class="col-lg-3 col-md-6 mb-3">
-                    <div class="stats-card bg-secondary text-white">
-                        <div class="metric-value">{{ quarantine_stats.pending_qc_samples|default:0 }}</div>
-                        <div class="metric-label">Pending QC Samples</div>
-                    </div>
-                </div>
-                <div class="col-lg-3 col-md-6 mb-3">
-                    <div class="stats-card bg-success text-white">
-                        <div class="metric-value">{{ quarantine_stats.approved_samples_today|default:0 }}</div>
-                        <div class="metric-label">Approved Today</div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Processing Time Metrics -->
-            <div class="row mb-4">
-                <div class="col-md-6">
-                    <div class="content-section">
-                        <h5><i class="fas fa-clock"></i> Average Processing Times</h5>
-                        <div class="mt-3">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span>QA Processing Time:</span>
-                                <span class="badge badge-info">
-                                    {% if quarantine_stats.avg_qa_processing_time %}
-                                        {{ quarantine_stats.avg_qa_processing_time|floatformat:1 }} hours
-                                    {% else %}
-                                        No data
-                                    {% endif %}
-                                </span>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span>QC Processing Time:</span>
-                                <span class="badge badge-secondary">
-                                    {% if quarantine_stats.avg_qc_processing_time %}
-                                        {{ quarantine_stats.avg_qc_processing_time|floatformat:1 }} hours
-                                    {% else %}
-                                        No data
-                                    {% endif %}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="content-section">
-                        <h5><i class="fas fa-chart-line"></i> Today's Sample Results</h5>
-                        <div class="mt-3">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span>Approved Samples:</span>
-                                <span class="badge badge-success">{{ quarantine_stats.approved_samples_today|default:0 }}</span>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span>Rejected Samples:</span>
-                                <span class="badge badge-danger">{{ quarantine_stats.rejected_samples_today|default:0 }}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Recent Sample Requests with Detailed Timeline -->
-            <div class="content-section">
-                <h5><i class="fas fa-list-alt"></i> Recent Sample Requests</h5>
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead class="thead-dark">
-                            <tr>
-                                <th>Batch Number</th>
-                                <th>Product</th>
-                                <th>Request Time</th>
-                                <th>QA Received</th>
-                                <th>QC Received</th>
-                                <th>QC Date & Time</th>
-                                <th>QA User</th>
-                                <th>QC User</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for sample in recent_sample_requests %}
-                            <tr>
-                                <td>
-                                    <strong>{{ sample.quarantine_batch.bmr.batch_number }}</strong>
-                                </td>
-                                <td>{{ sample.quarantine_batch.bmr.product.name }}</td>
-                                <td>
-                                    <span class="text-muted">{{ sample.request_date|date:"M d, Y" }}</span><br>
-                                    <small class="text-info">{{ sample.request_date|time:"H:i" }}</small><br>
-                                    <small class="text-secondary">by {{ sample.requested_by.get_full_name }}</small>
-                                </td>
-                                <td>
-                                    {% if sample.sample_date %}
-                                        <span class="text-muted">{{ sample.sample_date|date:"M d, Y" }}</span><br>
-                                        <small class="text-info">{{ sample.sample_date|time:"H:i" }}</small><br>
-                                        <small class="text-secondary">by {{ sample.sampled_by.get_full_name }}</small>
-                                    {% else %}
-                                        <span class="text-warning">Pending</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if sample.received_date %}
-                                        <span class="text-muted">{{ sample.received_date|date:"M d, Y" }}</span><br>
-                                        <small class="text-info">{{ sample.received_date|time:"H:i" }}</small><br>
-                                        <small class="text-secondary">by {{ sample.received_by.get_full_name }}</small>
-                                    {% else %}
-                                        <span class="text-warning">Pending</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if sample.approved_date %}
-                                        <span class="text-muted">{{ sample.approved_date|date:"M d, Y" }}</span><br>
-                                        <small class="text-info">{{ sample.approved_date|time:"H:i" }}</small><br>
-                                        {% if sample.qc_status == 'approved' %}
-                                            <small class="text-success">Approved by {{ sample.approved_by.get_full_name }}</small>
-                                        {% elif sample.qc_status == 'failed' %}
-                                            <small class="text-danger">Rejected by {{ sample.approved_by.get_full_name }}</small>
-                                        {% endif %}
-                                    {% else %}
-                                        <span class="text-warning">Pending</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if sample.sampled_by %}
-                                        <strong>{{ sample.sampled_by.get_full_name }}</strong><br>
-                                        <small class="text-muted">{{ sample.sampled_by.role|title }}</small>
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if sample.received_by %}
-                                        <strong>{{ sample.received_by.get_full_name }}</strong><br>
-                                        <small class="text-muted">{{ sample.received_by.role|title }}</small>
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if sample.qc_status == 'approved' %}
-                                        <span class="badge badge-success">Approved</span>
-                                    {% elif sample.qc_status == 'failed' %}
-                                        <span class="badge badge-danger">Failed</span>
-                                    {% elif sample.sample_date and not sample.received_date %}
-                                        <span class="badge badge-info">Pending QC Receipt</span>
-                                    {% elif sample.received_date and sample.qc_status == 'pending' %}
-                                        <span class="badge badge-warning">Pending QC Review</span>
-                                    {% elif not sample.sample_date %}
-                                        <span class="badge badge-secondary">Pending QA</span>
-                                    {% else %}
-                                        <span class="badge badge-secondary">{{ sample.get_qc_status_display }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <a href="{% url 'quarantine:details' sample.quarantine_batch.id %}" 
-                                       class="btn btn-sm btn-outline-primary" target="_blank">
-                                        <i class="fas fa-eye"></i> View Details
-                                    </a>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="10" class="text-center">No sample requests found</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            
-            <!-- Current Quarantine Batches -->
-            <div class="content-section mt-4">
-                <h5><i class="fas fa-warehouse"></i> Current Quarantine Batches</h5>
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead class="thead-dark">
-                            <tr>
-                                <th>Batch Number</th>
-                                <th>Product</th>
-                                <th>Current Phase</th>
-                                <th>Quarantine Date</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for batch in quarantine_batches %}
-                            <tr>
-                                <td><strong>{{ batch.bmr.batch_number }}</strong></td>
-                                <td>{{ batch.bmr.product.name }}</td>
-                                <td>
-                                    {% if batch.current_phase %}
-                                        <span class="badge badge-info">{{ batch.current_phase.phase_name|title }}</span>
-                                    {% else %}
-                                        <span class="text-muted">No phase</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <span class="text-muted">{{ batch.quarantine_date|date:"M d, Y" }}</span><br>
-                                    <small class="text-info">{{ batch.quarantine_date|time:"H:i" }}</small>
-                                </td>
-                                <td>
-                                    {% if batch.status == 'quarantined' %}
-                                        <span class="badge badge-warning">{{ batch.get_status_display }}</span>
-                                    {% elif batch.status == 'sample_approved' %}
-                                        <span class="badge badge-success">{{ batch.get_status_display }}</span>
-                                    {% elif batch.status == 'sample_rejected' %}
-                                        <span class="badge badge-danger">{{ batch.get_status_display }}</span>
-                                    {% else %}
-                                        <span class="badge badge-secondary">{{ batch.get_status_display }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <a href="{% url 'quarantine:details' batch.id %}" 
-                                       class="btn btn-sm btn-outline-primary" target="_blank">
-                                        <i class="fas fa-eye"></i> View Details
-                                    </a>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="6" class="text-center">No quarantine batches found</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+
     </main>
 </div>
 
 <script>
 // ========== UNIFIED ADMIN DASHBOARD JAVASCRIPT ==========
+
+// Function to scroll to specific sections when metric cards are clicked
+function scrollToSection(sectionId, filter = null) {
+    const targetElement = document.getElementById(sectionId);
+    if (targetElement) {
+        // Smooth scroll to the target section
+        targetElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start',
+            inline: 'nearest'
+        });
+        
+        // Add highlight animation to show the user where they scrolled
+        targetElement.style.transition = 'background-color 0.3s ease';
+        targetElement.style.backgroundColor = '#f8f9fa';
+        setTimeout(() => {
+            targetElement.style.backgroundColor = '';
+        }, 2000);
+        
+        // If there's a filter, actually hide/show content based on filter
+        if (filter) {
+            filterContent(targetElement, filter);
+        }
+    }
+}
+
+// Function to filter content based on status
+function filterContent(targetElement, filter) {
+    // Find all BMR/batch cards in the target section
+    const cards = targetElement.querySelectorAll('.card, .bmr-card, .batch-card, tr');
+    let visibleCount = 0;
+    
+    cards.forEach(card => {
+        const cardText = card.textContent.toLowerCase();
+        let shouldShow = false;
+        
+        switch(filter) {
+            case 'completed':
+                shouldShow = cardText.includes('completed') || cardText.includes('success') || cardText.includes('approved');
+                break;
+            case 'rejected':
+                shouldShow = cardText.includes('rejected') || cardText.includes('failed') || cardText.includes('error');
+                break;
+            case 'active':
+                shouldShow = cardText.includes('in progress') || cardText.includes('active') || cardText.includes('pending');
+                break;
+            default:
+                shouldShow = true;
+        }
+        
+        if (shouldShow) {
+            card.style.display = '';
+            visibleCount++;
+            // Add highlight to filtered items
+            card.style.transition = 'all 0.3s ease';
+            card.style.backgroundColor = '#f8f9fa';
+            card.style.border = '2px solid #007bff';
+            setTimeout(() => {
+                card.style.backgroundColor = '';
+                card.style.border = '';
+            }, 3000);
+        } else {
+            card.style.display = 'none';
+        }
+    });
+    
+    // Add a filter indicator
+    addFilterIndicator(targetElement, filter, visibleCount);
+}
+
+// Function to add filter indicator
+function addFilterIndicator(targetElement, filter, count) {
+    // Remove existing filter indicator
+    const existingIndicator = targetElement.querySelector('.filter-indicator');
+    if (existingIndicator) {
+        existingIndicator.remove();
+    }
+    
+    // Create new filter indicator
+    const indicator = document.createElement('div');
+    indicator.className = 'filter-indicator alert alert-info';
+    indicator.innerHTML = `
+        <i class="fas fa-filter"></i> 
+        Showing ${count} ${filter} items
+        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="clearFilter('${targetElement.id}')">
+            <i class="fas fa-times"></i> Clear Filter
+        </button>
+    `;
+    
+    // Insert at the beginning of the section
+    targetElement.insertBefore(indicator, targetElement.firstChild);
+}
+
+// Function to clear filters
+function clearFilter(sectionId) {
+    const section = document.getElementById(sectionId);
+    if (section) {
+        // Show all hidden items
+        const cards = section.querySelectorAll('.card, .bmr-card, .batch-card, tr');
+        cards.forEach(card => {
+            card.style.display = '';
+            card.style.backgroundColor = '';
+            card.style.border = '';
+        });
+        
+        // Remove filter indicator
+        const indicator = section.querySelector('.filter-indicator');
+        if (indicator) {
+            indicator.remove();
+        }
+    }
+}
 
 // Helper function to destroy all charts
 function destroyAllCharts() {
@@ -1618,49 +1789,18 @@ function destroyAllCharts() {
 // Navigation Function
 // Section Toggling Function - Don't call directly, use event listeners
 function showSection(sectionId, clickedElement) {
-    console.log('showSection called with:', sectionId);
-    
     // Get all sections and links
     const allSections = document.querySelectorAll('.content-section');
     const allLinks = document.querySelectorAll('.section-link');
     const targetSection = document.getElementById(sectionId);
     
-    // Debug all available sections
-    console.log('All content sections:', Array.from(allSections).map(s => ({ id: s.id, display: s.style.display, classList: Array.from(s.classList) })));
-    
     if (!targetSection) {
-        console.error('Section not found:', sectionId);
-        console.log('Available sections:', Array.from(allSections).map(s => s.id));
         alert(`Error: Section "${sectionId}" not found. Please contact system administrator.`);
         return;
     }
     
-    // Debug target section
-    console.log('Target section details:', { 
-        id: targetSection.id, 
-        display: targetSection.style.display, 
-        classList: Array.from(targetSection.classList),
-        hasDisplayNone: targetSection.style.display === 'none'
-    });
-    
     // Destroy any existing charts to prevent conflicts
     destroyAllCharts();
-    
-    // Debug
-    console.log('Target section:', targetSection);
-    console.log('All sections count:', allSections.length);
-    
-    // Special case for quarantine monitor - if target section is quarantine-monitor, use our enhanced function
-    if (sectionId === 'quarantine-monitor') {
-        console.log('Using enhanced quarantine display function');
-        try {
-            fixQuarantineDisplay();
-            return; // Exit early since we've handled this special case
-        } catch (e) {
-            console.error('Error using enhanced quarantine display:', e);
-            // Continue with normal flow if the enhanced function fails
-        }
-    }
     
     // Hide all content sections first
     allSections.forEach(section => {
@@ -1676,7 +1816,6 @@ function showSection(sectionId, clickedElement) {
     // Show selected section - use !important to override any CSS
     targetSection.style.setProperty('display', 'block', 'important');
     targetSection.classList.add('active');
-    console.log('Successfully showing section:', sectionId);
     
     // Add active class to clicked link
     if (clickedElement) {
@@ -1799,7 +1938,16 @@ function initAnalyticsCharts() {
                 labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
                 datasets: [{
                     label: 'Production Volume',
-                    data: [120, 145, 132, 178],
+                    data: [
+                        {% if selected_month_analytics.weekly_production %}
+                            {{ selected_month_analytics.weekly_production.0|default:0 }},
+                            {{ selected_month_analytics.weekly_production.1|default:0 }},
+                            {{ selected_month_analytics.weekly_production.2|default:0 }},
+                            {{ selected_month_analytics.weekly_production.3|default:0 }}
+                        {% else %}
+                            0, 0, 0, 0
+                        {% endif %}
+                    ],
                     borderColor: '#0056b3',
                     backgroundColor: 'rgba(0,86,179,0.1)',
                     tension: 0.4,
@@ -1848,6 +1996,133 @@ function initAnalyticsCharts() {
             }
         });
     }
+    
+    // Monthly Production Chart (Product Type Breakdown)
+    const monthlyProductionCtx = document.getElementById('monthlyProductionChart');
+    if (monthlyProductionCtx) {
+        const existingMonthlyChart = Chart.getChart(monthlyProductionCtx);
+        if (existingMonthlyChart) {
+            existingMonthlyChart.destroy();
+        }
+        
+        // Prepare data from Django context
+        const productLabels = [];
+        const productData = [];
+        const productColors = ['#007bff', '#28a745', '#ffc107', '#dc3545', '#17a2b8'];
+        
+        {% if selected_month_analytics.product_breakdown %}
+            {% for product_type, data in selected_month_analytics.product_breakdown.items %}
+                productLabels.push('{{ product_type|title }}s');
+                productData.push({{ data.batches|default:0 }});
+            {% endfor %}
+        {% endif %}
+        
+        new Chart(monthlyProductionCtx, {
+            type: 'pie',
+            data: {
+                labels: productLabels,
+                datasets: [{
+                    data: productData,
+                    backgroundColor: productColors.slice(0, productData.length),
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 20
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                return `${label}: ${value} batches (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Daily Production Chart for Selected Month
+    const dailyProductionCtx = document.getElementById('dailyProductionChart');
+    if (dailyProductionCtx) {
+        const existingDailyChart = Chart.getChart(dailyProductionCtx);
+        if (existingDailyChart) {
+            existingDailyChart.destroy();
+        }
+        
+        // Prepare daily data from Django context
+        const dailyLabels = [];
+        const dailyData = [];
+        
+        {% for daily_item in selected_month_analytics.daily_production %}
+            dailyLabels.push('{{ daily_item.day }}');
+            dailyData.push({{ daily_item.count|default:0 }});
+        {% endfor %}
+        
+        new Chart(dailyProductionCtx, {
+            type: 'bar',
+            data: {
+                labels: dailyLabels,
+                datasets: [{
+                    label: 'Batches Completed',
+                    data: dailyData,
+                    backgroundColor: 'rgba(0, 123, 255, 0.6)',
+                    borderColor: 'rgba(0, 123, 255, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Day of Month'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Batches'
+                        },
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                return `Day ${context[0].label} - {{ selected_month_analytics.month_name }} {{ selected_month_analytics.year }}`;
+                            },
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                return `${value} batch${value !== 1 ? 'es' : ''} completed`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
 }
 
 // Utility Functions
@@ -1856,18 +2131,48 @@ function viewTimeline(bmrId) {
 }
 
 function filterBMRTable() {
-    console.log('Filtering BMR table...');
+    // BMR table filtering logic would go here
+}
+
+function exportToExcel() {
+    // Get selected month and year values
+    const month = document.getElementById('month').value;
+    const year = document.getElementById('year').value;
+    
+    // Create export URL with parameters
+    const exportUrl = `{% url 'dashboards:export_monthly_production_excel' %}?month=${month}&year=${year}`;
+    
+    // Show loading indicator
+    const exportBtn = document.querySelector('button[onclick="exportToExcel()"]');
+    const originalText = exportBtn.innerHTML;
+    exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating Excel...';
+    exportBtn.disabled = true;
+    
+    // Create temporary link to trigger download
+    const link = document.createElement('a');
+    link.href = exportUrl;
+    link.download = `KPI_Production_Report_${getMonthName(month)}_${year}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Reset button after a short delay
+    setTimeout(() => {
+        exportBtn.innerHTML = originalText;
+        exportBtn.disabled = false;
+    }, 2000);
+}
+
+function getMonthName(monthNumber) {
+    const months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[monthNumber - 1];
 }
 
 // Initialize dashboard when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM fully loaded - initializing dashboard with direct handlers');
-    
-    // Check if URL contains "quarantine" and immediately display the quarantine section
-    if (window.location.href.toLowerCase().includes('quarantine')) {
-        console.log("URL contains 'quarantine', immediately displaying quarantine section");
-        setTimeout(emergencyShowQuarantineOnly, 300); // Small delay to ensure all elements are loaded
-    }
     
     // Use event delegation for better reliability
     document.addEventListener('click', function(e) {
@@ -1876,7 +2181,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (sectionLink) {
             e.preventDefault();
             const sectionId = sectionLink.getAttribute('data-section');
-            console.log('Section link clicked with section ID:', sectionId);
             
             if (sectionId) {
                 showSection(sectionId, sectionLink);
@@ -1888,30 +2192,39 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             return false;
         }
+        
+        // Check if the clicked element is a clickable metric card
+        const metricCard = e.target.closest('.clickable-metric');
+        if (metricCard) {
+            e.preventDefault();
+            const targetSection = metricCard.getAttribute('data-target');
+            const filter = metricCard.getAttribute('data-filter');
+            
+            if (targetSection) {
+                console.log('Metric card clicked:', targetSection, filter);
+                scrollToSection(targetSection, filter);
+            }
+            return false;
+        }
     });
     
     // Check URL for section parameter
     const urlParams = new URLSearchParams(window.location.search);
     const sectionParam = urlParams.get('section');
     
-    // Check if URL path contains 'quarantine-monitor'
-    const pathIncludesQuarantine = window.location.pathname.includes('quarantine-monitor');
-    
-    if (pathIncludesQuarantine) {
-        // If URL path indicates quarantine section, prioritize showing it
-        console.log('URL path indicates quarantine section');
-        const quarantineLink = document.getElementById('quarantine-monitor-link');
-        if (quarantineLink) {
-            showSection('quarantine-monitor', quarantineLink);
+    if (sectionParam === 'analytics-section') {
+        // Force show analytics section
+        const analyticsLink = document.getElementById('analytics-section-link');
+        if (analyticsLink) {
+            showSection('analytics-section', analyticsLink);
+            // Charts will be initialized by showSection function
         }
     } else if (sectionParam) {
-        // Find the link for this section
+        // Handle other sections
         const sectionLink = document.querySelector(`[data-section="${sectionParam}"]`);
         if (sectionLink) {
-            console.log('Loading section from URL parameter:', sectionParam);
             showSection(sectionParam, sectionLink);
         } else {
-            // Show dashboard-overview as fallback
             showSection('dashboard-overview', document.getElementById('dashboard-overview-link'));
         }
     } else {
@@ -1996,8 +2309,354 @@ document.addEventListener('DOMContentLoaded', function() {
         window.location.href = filterUrl;
     });
 });
-</script>
 
+// ========== ANALYTICS SECTION HANDLERS ==========
+
+// Handle View Analytics button click
+document.addEventListener('DOMContentLoaded', function() {
+    const viewAnalyticsBtn = document.getElementById('viewAnalyticsBtn');
+    if (viewAnalyticsBtn) {
+        viewAnalyticsBtn.addEventListener('click', function() {
+            const month = document.getElementById('month').value;
+            const year = document.getElementById('year').value;
+            
+            // Create URL with month, year, and section parameters
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('month', month);
+            currentUrl.searchParams.set('year', year);
+            currentUrl.searchParams.set('section', 'analytics-section');
+            
+            // Navigate to reload with new parameters - Django will handle the data
+            window.location.href = currentUrl.toString();
+        });
+    }
+});
+
+// ========== PRODUCT DETAILS MODAL FUNCTIONS ==========
+
+// Add click event listeners to product type cards
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listeners to all product type cards
+    function attachProductCardListeners() {
+        const productCards = document.querySelectorAll('.product-type-card');
+        
+        productCards.forEach(card => {
+            card.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const productType = this.getAttribute('data-product');
+                const batches = parseInt(this.getAttribute('data-batches'));
+                const totalUnits = parseInt(this.getAttribute('data-total-units'));
+                
+                showProductDetails(productType, batches, totalUnits);
+            });
+            
+            // Add visual feedback for clickability
+            card.style.cursor = 'pointer';
+        });
+    }
+    
+    // Initial attachment
+    attachProductCardListeners();
+    
+    // Re-attach listeners when month/year changes (since content is dynamically loaded)
+    const monthSelect = document.getElementById('month');
+    const yearSelect = document.getElementById('year');
+    
+    if (monthSelect && yearSelect) {
+        function reattachListeners() {
+            setTimeout(() => {
+                attachProductCardListeners();
+            }, 500); // Give time for content to load
+        }
+        
+        monthSelect.addEventListener('change', reattachListeners);
+        yearSelect.addEventListener('change', reattachListeners);
+    }
+});
+
+function showProductDetails(productType, batches, totalUnits) {
+    try {
+        // Get selected month and year
+        const monthElement = document.getElementById('month');
+        const yearElement = document.getElementById('year');
+        
+        if (!monthElement || !yearElement) {
+            alert('Error: Month or year selection not available.');
+            return;
+        }
+        
+        // Use the same month/year as the cards (from page context)
+        const selectedMonth = {{ selected_month }};
+        const selectedYear = {{ selected_year }};
+        
+        if (!selectedMonth || !selectedYear) {
+            alert('Please select a month and year first.');
+            return;
+        }
+        
+        // Set modal title
+        const titleElement = document.getElementById('productTypeTitle');
+        if (titleElement) {
+            titleElement.textContent = productType.charAt(0).toUpperCase() + productType.slice(1);
+        }
+        
+        // Show modal
+        const modalElement = document.getElementById('productDetailsModal');
+        if (modalElement) {
+            // Check if Bootstrap is available
+            if (typeof bootstrap !== 'undefined') {
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+            } else {
+                console.error('Bootstrap not loaded');
+                alert('Error: Unable to open modal. Please refresh the page.');
+                return;
+            }
+        } else {
+            console.error('Modal element not found');
+            alert('Error: Modal not available.');
+            return;
+        }
+        
+        // Reset modal state
+        showLoadingState();
+        
+        // Fetch detailed product data
+        fetchProductDetails(productType, selectedMonth, selectedYear);
+        
+    } catch (error) {
+        console.error('Error in showProductDetails:', error);
+        alert('Error opening product details: ' + error.message);
+    }
+}
+
+function showLoadingState() {
+    document.getElementById('productDetailsLoading').classList.remove('d-none');
+    document.getElementById('productDetailsError').classList.add('d-none');
+    document.getElementById('productDetailsContent').classList.add('d-none');
+}
+
+function showErrorState(message) {
+    document.getElementById('productDetailsLoading').classList.add('d-none');
+    document.getElementById('productDetailsError').classList.remove('d-none');
+    document.getElementById('productDetailsContent').classList.add('d-none');
+    document.getElementById('errorMessage').textContent = message;
+}
+
+function showContentState() {
+    document.getElementById('productDetailsLoading').classList.add('d-none');
+    document.getElementById('productDetailsError').classList.add('d-none');
+    document.getElementById('productDetailsContent').classList.remove('d-none');
+}
+
+function fetchProductDetails(productType, month, year) {
+    const url = `/dashboard/api/detailed-product-breakdown/?product_type=${productType}&month=${month}&year=${year}`;
+    
+    fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            populateProductDetails(data);
+            showContentState();
+        })
+        .catch(error => {
+            console.error('Error fetching product details:', error);
+            showErrorState(error.message || 'Failed to load product details');
+        });
+}
+
+function populateProductDetails(data) {
+    // Update summary cards
+    document.getElementById('totalProducts').textContent = data.summary.total_products;
+    document.getElementById('totalBatches').textContent = data.summary.total_batches;
+    document.getElementById('totalUnits').textContent = Math.round(data.summary.total_units);
+    
+    // Populate products table
+    const tableBody = document.getElementById('productsTableBody');
+    tableBody.innerHTML = '';
+    
+    if (Object.keys(data.products).length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center text-muted py-4">
+                    <i class="fas fa-inbox fa-2x mb-2"></i><br>
+                    No products found for ${data.month_name} ${data.year}
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    Object.entries(data.products).forEach(([productName, productData]) => {
+        const latestBatch = productData.batches[productData.batches.length - 1];
+        
+        const row = document.createElement('tr');
+        row.style.cursor = 'pointer';
+        row.onclick = () => showBatchDetails(productName, productData);
+        row.innerHTML = `
+            <td>
+                <strong>${productName}</strong>
+                <br><small class="text-muted">Click to see batches</small>
+            </td>
+            <td>${productData.product_code}</td>
+            <td>
+                <span class="badge bg-primary">${productData.total_batches}</span>
+            </td>
+            <td>${Math.round(productData.total_units)}</td>
+            <td>${Math.round(productData.avg_batch_size)}</td>
+            <td>
+                <small class="text-muted">
+                    ${latestBatch.batch_number || 'N/A'}<br>
+                    ${latestBatch.production_date}
+                </small>
+            </td>
+        `;
+        
+        // Add hover effects
+        row.addEventListener('mouseenter', () => {
+            row.style.backgroundColor = '#f8f9fa';
+        });
+        row.addEventListener('mouseleave', () => {
+            row.style.backgroundColor = '';
+        });
+        
+        tableBody.appendChild(row);
+    });
+}
+
+function showBatchDetails(productName, productData) {
+    const container = document.getElementById('batchDetailsContainer');
+    
+    let batchesHtml = `
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-boxes"></i> ${productName} - Batch Details
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th>Batch Number</th>
+                                <th>Batch Size</th>
+                                <th>Production Date</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+    `;
+    
+    productData.batches.forEach(batch => {
+        const statusBadge = batch.status === 'completed' ? 
+            '<span class="badge bg-success">Completed</span>' : 
+            `<span class="badge bg-warning">${batch.status}</span>`;
+            
+        batchesHtml += `
+            <tr>
+                <td><strong>${batch.batch_number || 'N/A'}</strong></td>
+                <td>${Math.round(batch.batch_size)}</td>
+                <td>${batch.production_date}</td>
+                <td>${statusBadge}</td>
+            </tr>
+        `;
+    });
+    
+    batchesHtml += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = batchesHtml;
+}
+
+// Export functionality for product details
+document.addEventListener('DOMContentLoaded', function() {
+    const exportButton = document.getElementById('exportProductDetails');
+    if (exportButton) {
+        exportButton.addEventListener('click', function() {
+            console.log('Export button clicked');
+            
+            const selectedMonth = document.getElementById('month').value;
+            const selectedYear = document.getElementById('year').value;
+            const productTypeElement = document.getElementById('productTypeTitle');
+            const productType = productTypeElement ? productTypeElement.textContent.toLowerCase() : '';
+            
+            console.log('Export data - Month:', selectedMonth, 'Year:', selectedYear, 'Product Type:', productType);
+            
+            if (selectedMonth && selectedYear && productType) {
+                // Show loading state
+                const originalText = this.innerHTML;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing Export...';
+                this.disabled = true;
+                
+                // Create export URL with product type filter
+                const exportUrl = `/dashboard/export/monthly-production-excel/?month=${selectedMonth}&year=${selectedYear}&product_type=${productType}`;
+                console.log('Export URL:', exportUrl);
+                
+                try {
+                    // Use a more reliable download method
+                    // Create a temporary link element
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = exportUrl;
+                    downloadLink.download = `KPI_${productType}_Production_${selectedMonth}_${selectedYear}.xlsx`;
+                    downloadLink.style.display = 'none';
+                    
+                    // Add to DOM, click, and remove
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
+                    
+                    console.log('Export link clicked successfully');
+                    
+                } catch (error) {
+                    console.error('Export failed:', error);
+                    // Fallback: try window.location
+                    try {
+                        window.location.href = exportUrl;
+                    } catch (fallbackError) {
+                        console.error('Fallback export also failed:', fallbackError);
+                        alert('Export failed. Please try refreshing the page and try again.');
+                    }
+                }
+
+                
+                // Reset button after a delay
+                setTimeout(() => {
+                    this.innerHTML = originalText;
+                    this.disabled = false;
+                }, 2000);
+                
+            } else {
+                // Show error message in button
+                const originalText = this.innerHTML;
+                this.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>No Data';
+                this.disabled = true;
+                
+                // Reset button after delay
+                setTimeout(() => {
+                    this.innerHTML = originalText;
+                    this.disabled = false;
+                }, 2000);
+            }
+        });
+    }
+});
+
+</script>
 <!-- QC Test Detail Modals -->
 <!-- Passed Tests Modal -->
 <div class="modal fade" id="passedTestsModal" tabindex="-1" aria-labelledby="passedTestsModalLabel" aria-hidden="true">
@@ -2134,7 +2793,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-danger" onclick="alert('Quality review functionality coming soon!')">
+                <button type="button" class="btn btn-danger" disabled title="Quality review functionality will be available in future updates">
                     <i class="fas fa-exclamation-triangle"></i> Initiate Quality Review
                 </button>
             </div>
@@ -2224,7 +2883,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-warning" onclick="alert('Test monitoring dashboard coming soon!')">
+                <button type="button" class="btn btn-warning" disabled title="Test monitoring dashboard will be available in future updates">
                     <i class="fas fa-chart-line"></i> Monitor All Tests
                 </button>
             </div>
@@ -2232,255 +2891,101 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
-<!-- Debug Tools Section -->
-<div class="fixed-bottom p-3 bg-dark text-white" style="z-index: 9999; opacity: 0.9; display: none;" id="debug-panel">
-    <div class="container">
-        <div class="row">
-            <div class="col-12">
-                <h5>Debug Panel</h5>
-                <button class="btn btn-sm btn-warning mb-2" onclick="debugSections()">Debug All Sections</button>
-                <button class="btn btn-sm btn-success mb-2" onclick="emergencyShowQuarantineOnly()">Emergency Show Quarantine</button>
-                <a href="/dashboard/admin/quarantine-monitor/" class="btn btn-sm btn-info mb-2">Direct URL to Quarantine</a>
-                <div id="debug-output" class="bg-dark text-light p-2" style="max-height: 300px; overflow-y: auto;">
-                    <p>Debug information will appear here</p>
+<!-- Product Details Modal -->
+<div class="modal fade" id="productDetailsModal" tabindex="-1" aria-labelledby="productDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="productDetailsModalLabel">
+                    <i class="fas fa-boxes"></i> <span id="productTypeTitle"></span> Production Details
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Loading state -->
+                <div id="productDetailsLoading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Loading product details...</p>
                 </div>
-                <div class="mt-2">
-                    <button class="btn btn-sm btn-danger" onclick="document.getElementById('debug-panel').style.display='none'">Close</button>
-                    <button class="btn btn-sm btn-primary ms-2" onclick="window.location.reload()">Reload Page</button>
+                
+                <!-- Error state -->
+                <div id="productDetailsError" class="text-center py-4 d-none">
+                    <i class="fas fa-exclamation-triangle fa-2x text-warning mb-3"></i>
+                    <h6>Unable to load product details</h6>
+                    <p class="text-muted" id="errorMessage">Please try again later.</p>
                 </div>
+                
+                <!-- Content -->
+                <div id="productDetailsContent" class="d-none">
+                    <!-- Summary Cards -->
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body text-center">
+                                    <h3 class="mb-0" id="totalProducts">0</h3>
+                                    <small>Different Products</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-success text-white">
+                                <div class="card-body text-center">
+                                    <h3 class="mb-0" id="totalBatches">0</h3>
+                                    <small>Total Batches</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-info text-white">
+                                <div class="card-body text-center">
+                                    <h3 class="mb-0" id="totalUnits">0</h3>
+                                    <small>Total Units</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Products Table -->
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Product Name</th>
+                                    <th>Product Code</th>
+                                    <th>Batches</th>
+                                    <th>Total Units</th>
+                                    <th>Avg Batch Size</th>
+                                    <th>Latest Batch</th>
+                                </tr>
+                            </thead>
+                            <tbody id="productsTableBody">
+                                <!-- Dynamic content will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Batch Details Section -->
+                    <div class="mt-4">
+                        <h6>
+                            <i class="fas fa-list-ul"></i> Batch Details 
+                            <small class="text-muted">(Click on a product to see batch details)</small>
+                        </h6>
+                        <div id="batchDetailsContainer" class="mt-3">
+                            <p class="text-muted text-center">Select a product to view batch details</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="exportProductDetails">
+                    <i class="fas fa-download"></i> Export to Excel
+                </button>
             </div>
         </div>
     </div>
 </div>
-
-<script>
-// Debug functions - use "D" key to toggle debug panel
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'D' && e.ctrlKey && e.shiftKey) {
-        const panel = document.getElementById('debug-panel');
-        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    }
-});
-
-// Function to force display the quarantine section
-function fixQuarantineDisplay() {
-    try {
-        // Get all the elements we need
-        const quarantineSection = document.getElementById('quarantine-monitor');
-        const quarantineLink = document.getElementById('quarantine-monitor-link');
-        const allSections = document.querySelectorAll('.content-section');
-        const allLinks = document.querySelectorAll('.section-link');
-        
-        // Hide all sections and remove active classes
-        allSections.forEach(section => {
-            section.style.display = 'none';
-            section.classList.remove('active');
-        });
-        
-        allLinks.forEach(link => {
-            link.classList.remove('active');
-        });
-        
-        // Force show quarantine section with multiple techniques
-        quarantineSection.style.removeProperty('display');
-        quarantineSection.style.setProperty('display', 'block', 'important');
-        quarantineSection.classList.add('active');
-        
-        // Mark the link as active
-        if (quarantineLink) {
-            quarantineLink.classList.add('active');
-        }
-        
-        // Add a success message if status div exists
-        const statusDiv = document.getElementById('quarantine-data-status');
-        if (statusDiv) {
-            statusDiv.innerHTML = '<div class="alert alert-success">Quarantine section is now forcibly displayed!</div>';
-        } else {
-            console.warn('quarantine-data-status element not found, cannot show success message');
-        }
-        
-        // Scroll to the section
-        quarantineSection.scrollIntoView({behavior: 'smooth'});
-        
-        // Fix sidebar highlighting
-        document.querySelectorAll('#sidebar a').forEach(a => {
-            a.classList.remove('active');
-        });
-        quarantineLink.classList.add('active');
-        
-    } catch (error) {
-        console.error("Error forcing quarantine display:", error);
-        alert("Error showing quarantine section: " + error.message);
-    }
-}
-
-// Function to check quarantine data and display status
-function checkQuarantineData() {
-    const statusDiv = document.getElementById('quarantine-data-status');
-    if (!statusDiv) {
-        console.error('quarantine-data-status element not found');
-        alert('Error: Could not find data status display element.');
-        return;
-    }
-    statusDiv.innerHTML = '<div class="spinner-border spinner-border-sm text-primary" role="status"></div> Checking data...';
-    
-    // Variables to check
-    let output = '';
-    
-    // Check if quarantine_stats exists
-    const statsCheck = {
-        total_quarantine_batches: {{ quarantine_stats.total_quarantine_batches|default:'null' }},
-        pending_qa_samples: {{ quarantine_stats.pending_qa_samples|default:'null' }},
-        pending_qc_samples: {{ quarantine_stats.pending_qc_samples|default:'null' }},
-        approved_samples_today: {{ quarantine_stats.approved_samples_today|default:'null' }},
-        rejected_samples_today: {{ quarantine_stats.rejected_samples_today|default:'null' }}
-    };
-    
-    output += '<div class="card mb-2"><div class="card-header">Quarantine Stats</div>';
-    output += '<div class="card-body">';
-    
-    // Check each stat
-    for (const [key, value] of Object.entries(statsCheck)) {
-        const statusClass = value === null ? 'text-danger' : 'text-success';
-        const statusIcon = value === null ? 
-            '<i class="fas fa-times-circle text-danger"></i>' : 
-            '<i class="fas fa-check-circle text-success"></i>';
-        output += `<div class="mb-1">${statusIcon} <strong>${key}:</strong> <span class="${statusClass}">${value === null ? 'Missing' : value}</span></div>`;
-    }
-    
-    output += '</div></div>';
-    
-    // Check if recent_sample_requests exists
-    {% if recent_sample_requests %}
-        output += '<div class="alert alert-success"><i class="fas fa-check-circle"></i> Sample requests data is available. Count: {{ recent_sample_requests|length }}</div>';
-    {% else %}
-        output += '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> No sample requests data available!</div>';
-    {% endif %}
-    
-    statusDiv.innerHTML = output;
-}
-
-// Function to debug all sections
-function debugSections() {
-    const output = document.getElementById('debug-output');
-    output.innerHTML = '';
-    
-    // Check all sections
-    const sections = document.querySelectorAll('.content-section');
-    let html = '<h6>All Content Sections:</h6>';
-    
-    sections.forEach(section => {
-        html += `<div>
-            <strong>ID:</strong> ${section.id}<br>
-            <strong>Classes:</strong> ${Array.from(section.classList).join(', ')}<br>
-            <strong>Display:</strong> ${window.getComputedStyle(section).display}<br>
-            <strong>Active Class:</strong> ${section.classList.contains('active')}<br>
-            <strong>Visibility:</strong> ${window.getComputedStyle(section).visibility}<br>
-            <hr>
-        </div>`;
-    });
-    
-    // Check all section links
-    html += '<h6>All Section Links:</h6>';
-    const links = document.querySelectorAll('.section-link');
-    links.forEach(link => {
-        html += `<div>
-            <strong>Link ID:</strong> ${link.id}<br>
-            <strong>Data Section:</strong> ${link.getAttribute('data-section')}<br>
-            <strong>Active Class:</strong> ${link.classList.contains('active')}<br>
-            <hr>
-        </div>`;
-    });
-    
-    output.innerHTML = html;
-}
-
-// Ultra-simple emergency function to show ONLY quarantine section
-function emergencyShowQuarantineOnly() {
-    try {
-        // Get all content sections and hide them
-        const allSections = document.querySelectorAll('.content-section');
-        allSections.forEach(section => {
-            section.style.display = 'none';
-        });
-        
-        // Find quarantine section
-        const quarantineSection = document.getElementById('quarantine-monitor');
-        
-        // If found, show it
-        if (quarantineSection) {
-            // Apply multiple display methods to ensure it works
-            quarantineSection.style.display = 'block';
-            quarantineSection.style.setProperty('display', 'block', 'important');
-            quarantineSection.setAttribute('style', 'display: block !important');
-            
-            // Add a direct visual indicator
-            const header = quarantineSection.querySelector('h1') || quarantineSection.querySelector('div');
-            if (header) {
-                const indicator = document.createElement('div');
-                indicator.className = 'alert alert-success mt-2';
-                indicator.innerHTML = '<strong>Section Successfully Displayed!</strong>';
-                header.parentNode.insertBefore(indicator, header.nextSibling);
-            }
-            
-            // Scroll to it
-            setTimeout(() => {
-                quarantineSection.scrollIntoView({behavior: 'smooth'});
-            }, 100);
-        } else {
-            alert("ERROR: Could not find quarantine section element!");
-        }
-    } catch (e) {
-        alert("ERROR: " + e.message);
-    }
-}
-
-// Emergency function to show quarantine section
-function emergencyShowQuarantine() {
-    const output = document.getElementById('debug-output');
-    if (output) {
-        output.innerHTML = '<p>Attempting emergency display of quarantine section...</p>';
-    }
-    
-    try {
-        // Try multiple approaches
-        const quarantineSection = document.getElementById('quarantine-monitor');
-        
-        if (!quarantineSection) {
-            output.innerHTML += '<p class="text-danger">ERROR: Quarantine section element not found!</p>';
-            return;
-        }
-        
-        // 1. Direct style approach
-        quarantineSection.style.setProperty('display', 'block', 'important');
-        quarantineSection.classList.add('active');
-        
-        // 2. Add admin-section class if missing
-        if (!quarantineSection.classList.contains('admin-section')) {
-            quarantineSection.classList.add('admin-section');
-            output.innerHTML += '<p>Added missing admin-section class</p>';
-        }
-        
-        // 3. Highlight the sidebar link
-        const link = document.getElementById('quarantine-monitor-link');
-        if (link) {
-            link.classList.add('active');
-            output.innerHTML += '<p>Activated sidebar link</p>';
-        }
-        
-        // Report success
-        output.innerHTML += `
-            <p class="text-success">Emergency display completed!</p>
-            <p>Quarantine section classes: ${Array.from(quarantineSection.classList).join(', ')}</p>
-            <p>Current display style: ${window.getComputedStyle(quarantineSection).display}</p>
-        `;
-        
-        // Manually trigger section activation via proper function
-        showSection('quarantine-monitor', document.getElementById('quarantine-monitor-link'));
-    } catch(e) {
-        output.innerHTML += `<p class="text-danger">ERROR: ${e.message}</p>`;
-    }
-}
-</script>
 
 {% endblock content %}

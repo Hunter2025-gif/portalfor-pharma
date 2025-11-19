@@ -16,6 +16,7 @@
         .dashboard-body {
             background-color: #f8f9fa;
             min-height: 100vh;
+            padding-top: 56px;
         }
         .dashboard-container {
             padding: 20px;
@@ -136,11 +137,12 @@
 </head>
 <body class="dashboard-body">
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark" style="background-color: #0056b3;">
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top" style="background-color: #0056b3;">
         <div class="container-fluid position-relative">
             <div class="w-100 d-flex justify-content-center">
                 <a class="navbar-brand mx-auto" href="{% url 'home' %}" style="color: white !important;">
                     {% load static %}
+                    {% load dashboard_permissions %}
                     <img src="{% static 'Main Logo.png' %}" alt="KPI Logo" height="30" class="me-2" onerror="this.style.display='none'">
                     Kampala Pharmaceutical Industries(KPI)
                 </a>
@@ -157,8 +159,11 @@
                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown" style="min-width: 220px;">
                         <li><a class="dropdown-item" href="{% url 'home' %}"><i class="fas fa-tachometer-alt me-2"></i>Dashboard</a></li>
                         <li><a class="dropdown-item" href="{% url 'accounts:profile' %}"><i class="fas fa-user me-2"></i>Profile</a></li>
-                        {% if user.is_staff %}
+                        {% has_dashboard_permission user 'admin_dashboard' as can_access_admin_dashboard %}
+                        {% if can_access_admin_dashboard %}
                         <li><a class="dropdown-item" href="{% url 'dashboards:admin_dashboard' %}"><i class="fas fa-chart-line me-2"></i>Admin Dashboard</a></li>
+                        {% endif %}
+                        {% if user.is_superuser %}
                         <li><a class="dropdown-item" href="{% url 'admin:index' %}"><i class="fas fa-cog me-2"></i>Admin Panel</a></li>
                         {% endif %}
                         {% if user.is_staff or user.is_superuser or user.role == 'admin' %}

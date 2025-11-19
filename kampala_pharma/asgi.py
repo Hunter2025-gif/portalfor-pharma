@@ -1,16 +1,50 @@
 """
-ASGI config for kampala_pharma project.
+ASGI config for kampala_pharma project with WebSocket support.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/4.2/howto/deployment/asgi/
+This configuration supports both HTTP and WebSocket connections for real-time features.
 """
 
 import os
-
+import django
 from django.core.asgi import get_asgi_application
 
+# Initialize Django ASGI application early to ensure the AppRegistry is populated
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'kampala_pharma.settings')
+django.setup()
 
-application = get_asgi_application()
+# Import Django ASGI application
+django_asgi_app = get_asgi_application()
+
+# Import Channels routing
+try:
+    from channels.routing import ProtocolTypeRouter, URLRouter
+    from channels.auth import AuthMiddlewareStack
+    from django.urls import path, re_path
+    
+    # Define WebSocket URL patterns (will be populated when WebSocket views are created)
+    websocket_urlpatterns = [
+        # Real-time dashboard updates
+        re_path(r'ws/dashboard/$', 'dashboards.consumers.DashboardConsumer'),
+        # Production status updates  
+        re_path(r'ws/production/$', 'workflow.consumers.ProductionConsumer'),
+        # BMR status updates
+        re_path(r'ws/bmr/(?P<bmr_id>\w+)/$', 'bmr.consumers.BMRConsumer'),
+    ]
+    
+    # Combined ASGI application with both HTTP and WebSocket support
+    application = ProtocolTypeRouter({
+        "http": django_asgi_app,
+        "websocket": AuthMiddlewareStack(
+            URLRouter(websocket_urlpatterns)
+        ),
+    })
+    
+    print("🔌 WebSocket support enabled")
+    
+except ImportError:
+    # Fallback to HTTP-only if Channels is not available
+    application = django_asgi_app
+    print("📡 HTTP-only mode (WebSocket support requires 'channels' package)")
+
+print("🚀 KPI Operations ASGI application ready")

@@ -92,7 +92,7 @@
                             <table class="table table-striped table-hover">
                                 <thead class="table-dark">
                                     <tr>
-                                        <th>BMR Number</th>
+                                        <th>Batch Number</th>
                                         <th>Product</th>
                                         <th>Batch Size</th>
                                         <th>Priority</th>
@@ -104,7 +104,7 @@
                                 <tbody>
                                     {% for phase in my_phases %}
                                     <tr>
-                                        <td><strong class="text-primary">{{ phase.bmr.bmr_number }}</strong></td>
+                                        <td><strong class="text-primary">{{ phase.bmr.batch_number }}</strong></td>
                                         <td>{{ phase.bmr.product.product_name }}</td>
                                         <td>{{ phase.bmr.batch_size|floatformat:0 }} {{ phase.bmr.product.unit_of_measure }}</td>
                                         <td>
@@ -134,12 +134,12 @@
                                                 </a>
                                                 {% if phase.status == 'pending' %}
                                                 <button class="btn btn-outline-success btn-sm"
-                                                        onclick="startRelease('{{ phase.bmr.pk }}', '{{ phase.bmr.bmr_number }}')">
+                                                        onclick="startRelease('{{ phase.bmr.pk }}', '{{ phase.bmr.batch_number }}')">
                                                     <i class="fas fa-play"></i> Start
                                                 </button>
                                                 {% elif phase.status == 'in_progress' %}
                                                 <button class="btn btn-outline-warning btn-sm"
-                                                        onclick="completeRelease('{{ phase.bmr.pk }}', '{{ phase.bmr.bmr_number }}')">
+                                                        onclick="completeRelease('{{ phase.bmr.pk }}', '{{ phase.bmr.batch_number }}')">
                                                     <i class="fas fa-check"></i> Complete
                                                 </button>
                                                 {% endif %}
@@ -177,7 +177,7 @@
                             <table class="table table-hover">
                                 <thead>
                                     <tr>
-                                        <th>BMR Number</th>
+                                        <th>Batch Number</th>
                                         <th>Product</th>
                                         <th>Batch Size</th>
                                         <th>Completed</th>
@@ -187,7 +187,7 @@
                                 <tbody>
                                     {% for phase in recently_completed %}
                                     <tr>
-                                        <td><strong class="text-primary">{{ phase.bmr.bmr_number }}</strong></td>
+                                        <td><strong class="text-primary">{{ phase.bmr.batch_number }}</strong></td>
                                         <td>{{ phase.bmr.product.product_name }}</td>
                                         <td>{{ phase.bmr.batch_size|floatformat:0 }} {{ phase.bmr.product.unit_of_measure }}</td>
                                         <td>{{ phase.completed_date|date:"M d, H:i" }}</td>
@@ -273,7 +273,7 @@ function refreshDashboard() {
     window.location.reload();
 }
 function startRelease(bmrId, bmrNumber) {
-    const notes = prompt(`Enter notes for starting raw material release for BMR ${bmrNumber}:`);
+    const notes = prompt(`Enter notes for starting raw material release for Batch ${bmrNumber}:`);
     if (notes !== null) {
         const form = document.createElement('form');
         form.method = 'POST';
@@ -306,7 +306,7 @@ function startRelease(bmrId, bmrNumber) {
 }
 
 function completeRelease(bmrId, bmrNumber) {
-    const notes = prompt(`Enter notes for completing raw material release for BMR ${bmrNumber}:`);
+    const notes = prompt(`Enter notes for completing raw material release for Batch ${bmrNumber}:`);
     if (notes !== null) {
         const form = document.createElement('form');
         form.method = 'POST';

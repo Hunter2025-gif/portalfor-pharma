@@ -1,8 +1,42 @@
 {% extends 'base.html' %}
 
 {% block title %}Packaging Store Dashboard - Kampala Pharmaceutical Industries{% endblock %}
+{% load static %}
+
+{% block extra_css %}
+<style>
+.countdown-timer {
+    min-width: 120px;
+}
+
+.countdown-display {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.countdown-timer.overrun {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.progress {
+    border-radius: 10px;
+    background-color: #e9ecef;
+}
+
+.progress-bar {
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+</style>
+{% endblock %}
 
 {% block content %}
+{% csrf_token %}
 {% include 'notifications/phase_notification.html' %}
 
 <div class="container-fluid mt-4">
@@ -121,7 +155,7 @@
                                         <th>Batch Size</th>
                                         <th>Packaging Units Needed</th>
                                         <th>Status</th>
-                                        <th>Started</th>
+                                        <th>Time Remaining</th>
                                         <th>Priority</th>
                                         <th>Actions</th>
                                     </tr>
@@ -161,10 +195,40 @@
                                             {% endif %}
                                         </td>
                                         <td>
-                                            {% if phase.started_date %}
-                                                {{ phase.started_date|date:"M d, H:i" }}
+                                            {% if phase.status == 'in_progress' and phase.started_date %}
+                                                {% if phase.is_overrun %}
+                                                    <div class="countdown-timer overrun" 
+                                                         data-phase-id="{{ phase.id }}"
+                                                         data-remaining-seconds="0">
+                                                        <span class="text-danger">
+                                                            <i class="fas fa-exclamation-triangle"></i>
+                                                            OVERRUN: +{{ phase.remaining_hours|floatformat:1|slice:"1:" }}h
+                                                        </span>
+                                                    </div>
+                                                {% else %}
+                                                    <div class="countdown-timer" 
+                                                         data-phase-id="{{ phase.id }}"
+                                                         data-remaining-seconds="{{ phase.remaining_seconds }}">
+                                                        <span class="countdown-display text-primary">
+                                                            <i class="fas fa-clock"></i>
+                                                            <span class="timer-text">{{ phase.remaining_hours|floatformat:1 }}h left</span>
+                                                        </span>
+                                                        <div class="progress mt-1" style="height: 4px;">
+                                                            <div class="progress-bar bg-info" 
+                                                                 style="width: {{ phase.progress_percent }}%"></div>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                            {% elif phase.status == 'pending' %}
+                                                <span class="text-muted">
+                                                    <i class="fas fa-clock"></i> Not started
+                                                </span>
+                                            {% elif phase.status == 'completed' %}
+                                                <span class="text-success">
+                                                    <i class="fas fa-check-circle"></i> Completed
+                                                </span>
                                             {% else %}
-                                                <span class="text-muted">Not started</span>
+                                                <span class="text-muted">{{ phase.status|title }}</span>
                                             {% endif %}
                                         </td>
                                         <td>
@@ -184,12 +248,12 @@
                                                 </a>
                                                 {% if phase.status == 'pending' %}
                                                 <button class="btn btn-outline-success btn-sm"
-                                                        onclick="startRelease('{{ phase.bmr.pk }}')">
+                                                        onclick="startRelease('{{ phase.id }}')">
                                                     <i class="fas fa-play"></i> Start
                                                 </button>
                                                 {% elif phase.status == 'in_progress' %}
                                                 <button class="btn btn-outline-success btn-sm"
-                                                        onclick="completeRelease('{{ phase.bmr.pk }}')">
+                                                        onclick="completeRelease('{{ phase.id }}')">
                                                     <i class="fas fa-check"></i> Release
                                                 </button>
                                                 {% endif %}
@@ -245,17 +309,181 @@
     </div>
 
 <script>
-function startRelease(bmrId) {
-    if (confirm('Start packaging material release for this BMR?')) {
-        window.location.href = `/bmr/${bmrId}/start-phase/packaging_material_release/`;
+function startRelease(phaseId) {
+    if (confirm('Start packaging material release for this phase?')) {
+        const notes = prompt('Enter start notes (optional):');
+        if (notes !== null) {
+            // Check if CSRF token exists
+            const csrfTokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
+            if (!csrfTokenInput) {
+                alert('Security token not found. Please refresh the page.');
+                return;
+            }
+            
+            // Create a form and submit it
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{% url "dashboards:packaging_dashboard" %}';
+            
+            // Add CSRF token
+            const csrfToken = csrfTokenInput.value;
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrfmiddlewaretoken';
+            csrfInput.value = csrfToken;
+            form.appendChild(csrfInput);
+            
+            // Add phase_id
+            const phaseInput = document.createElement('input');
+            phaseInput.type = 'hidden';
+            phaseInput.name = 'phase_id';
+            phaseInput.value = phaseId;
+            form.appendChild(phaseInput);
+            
+            // Add action
+            const actionInput = document.createElement('input');
+            actionInput.type = 'hidden';
+            actionInput.name = 'action';
+            actionInput.value = 'start';
+            form.appendChild(actionInput);
+            
+            // Add notes
+            const notesInput = document.createElement('input');
+            notesInput.type = 'hidden';
+            notesInput.name = 'notes';
+            notesInput.value = notes || '';
+            form.appendChild(notesInput);
+            
+            document.body.appendChild(form);
+            form.submit();
+        }
     }
 }
 
-function completeRelease(bmrId) {
+function completeRelease(phaseId) {
     const comments = prompt('Enter release comments (optional):');
     if (comments !== null) {
-        window.location.href = `/bmr/${bmrId}/complete-phase/packaging_material_release/?comments=${encodeURIComponent(comments)}`;
+        // Create a form and submit it
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{% url "dashboards:packaging_dashboard" %}';
+        
+        // Add CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = csrfToken;
+        form.appendChild(csrfInput);
+        
+        // Add phase_id
+        const phaseInput = document.createElement('input');
+        phaseInput.type = 'hidden';
+        phaseInput.name = 'phase_id';
+        phaseInput.value = phaseId;
+        form.appendChild(phaseInput);
+        
+        // Add action
+        const actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'action';
+        actionInput.value = 'complete';
+        form.appendChild(actionInput);
+        
+        // Add notes
+        const notesInput = document.createElement('input');
+        notesInput.type = 'hidden';
+        notesInput.name = 'notes';
+        notesInput.value = comments || '';
+        form.appendChild(notesInput);
+        
+        document.body.appendChild(form);
+        form.submit();
     }
 }
+
+// Countdown Timer Functionality
+function updateCountdownTimers() {
+    const timers = document.querySelectorAll('.countdown-timer:not(.overrun)');
+    
+    timers.forEach(timer => {
+        const remainingSeconds = parseInt(timer.dataset.remainingSeconds);
+        const timerText = timer.querySelector('.timer-text');
+        const progressBar = timer.querySelector('.progress-bar');
+        
+        if (remainingSeconds > 0) {
+            // Decrease remaining time by 1 second
+            const newRemainingSeconds = remainingSeconds - 1;
+            timer.dataset.remainingSeconds = newRemainingSeconds;
+            
+            // Convert to hours and minutes
+            const hours = Math.floor(newRemainingSeconds / 3600);
+            const minutes = Math.floor((newRemainingSeconds % 3600) / 60);
+            
+            if (hours > 0) {
+                timerText.textContent = `${hours}h ${minutes}m left`;
+            } else if (minutes > 0) {
+                timerText.textContent = `${minutes}m left`;
+            } else if (newRemainingSeconds > 0) {
+                timerText.textContent = `${newRemainingSeconds}s left`;
+            }
+            
+            // Update progress bar color based on time remaining
+            if (newRemainingSeconds < 1800) { // Less than 30 minutes
+                progressBar.className = 'progress-bar bg-danger';
+            } else if (newRemainingSeconds < 3600) { // Less than 1 hour
+                progressBar.className = 'progress-bar bg-warning';
+            } else {
+                progressBar.className = 'progress-bar bg-info';
+            }
+        } else {
+            // Time expired - convert to overrun display
+            timer.classList.add('overrun');
+            timer.innerHTML = `
+                <span class="text-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    OVERRUN: Phase exceeded expected time
+                </span>
+            `;
+            
+            // Send notification to admin (only once per phase)
+            const phaseId = timer.dataset.phaseId;
+            if (phaseId && !timer.dataset.notificationSent) {
+                sendOverrunNotification(phaseId);
+                timer.dataset.notificationSent = 'true';
+            }
+        }
+    });
+}
+
+function sendOverrunNotification(phaseId) {
+    // Send notification to admin when phase timer expires
+    fetch('{% url "dashboards:phase_timer_expired" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            'phase_id': phaseId
+        })
+    })
+    .then(response => {
+        if (response.ok) {
+            console.log('Timer expiration notification sent to admin for phase:', phaseId);
+        } else {
+            console.error('Failed to send timer notification:', response.status);
+        }
+    })
+    .catch(error => {
+        console.error('Error sending timer notification:', error);
+    });
+}
+
+// Start countdown timers when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Update timers every second
+    setInterval(updateCountdownTimers, 1000);
+});
 </script>
 {% endblock %}
