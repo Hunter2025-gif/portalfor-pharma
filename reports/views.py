@@ -286,26 +286,25 @@ def export_comments_word(request):
     try:
         # Get filtered comments data
         raw_comments = get_filtered_comments_data(request)
-    
-    # Group comments by BMR number
-    bmr_comments = {}
-    
-    for comment in raw_comments:
-        bmr_number = comment['bmr_number']
-        
-        if bmr_number not in bmr_comments:
-            bmr_comments[bmr_number] = {
-                'product': comment['product'],
-                'comments': []
-            }
-        
-        bmr_comments[bmr_number]['comments'].append({
-            'type': comment['comment_type'],
-            'phase': comment['phase'],
-            'date': comment['date'],
-            'comments': comment['comments'],
-            'status': comment['status']
-        })
+
+        # Group comments by BMR number
+        bmr_comments = {}
+        for comment in raw_comments:
+            bmr_number = comment['bmr_number']
+            if bmr_number not in bmr_comments:
+                bmr_comments[bmr_number] = {
+                    'product': comment['product'],
+                    'comments': []
+                }
+            bmr_comments[bmr_number]['comments'].append({
+                'type': comment['comment_type'],
+                'phase': comment['phase'],
+                'date': comment['date'],
+                'comments': comment['comments'],
+                'status': comment['status']
+            })
+    except Exception as e:
+        return HttpResponse(f"Error retrieving comments data: {e}", content_type="text/plain")
     
     # Create Word document
     doc = Document()
