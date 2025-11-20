@@ -283,8 +283,9 @@ def export_comments_word(request):
         return HttpResponse("python-docx library not installed. Please install it to use Word export.", 
                           content_type="text/plain")
     
-    # Get filtered comments data
-    raw_comments = get_filtered_comments_data(request)
+    try:
+        # Get filtered comments data
+        raw_comments = get_filtered_comments_data(request)
     
     # Group comments by BMR number
     bmr_comments = {}
@@ -312,20 +313,26 @@ def export_comments_word(request):
     # Add company header and styling
     styles = doc.styles
     
-    # Create title style
-    title_style = styles.add_style('KPI Title', WD_STYLE_TYPE.PARAGRAPH)
-    title_font = title_style.font
-    title_font.name = 'Arial'
-    title_font.size = Pt(18)
-    title_font.bold = True
-    title_font.color.rgb = RGBColor(0, 0, 139)  # Dark blue
+    # Create title style (check if exists first)
+    try:
+        title_style = styles['KPI Title']
+    except KeyError:
+        title_style = styles.add_style('KPI Title', WD_STYLE_TYPE.PARAGRAPH)
+        title_font = title_style.font
+        title_font.name = 'Arial'
+        title_font.size = Pt(18)
+        title_font.bold = True
+        title_font.color.rgb = RGBColor(0, 0, 139)  # Dark blue
     
-    # Create subtitle style
-    subtitle_style = styles.add_style('KPI Subtitle', WD_STYLE_TYPE.PARAGRAPH)
-    subtitle_font = subtitle_style.font
-    subtitle_font.name = 'Arial'
-    subtitle_font.size = Pt(12)
-    subtitle_font.italic = True
+    # Create subtitle style (check if exists first)
+    try:
+        subtitle_style = styles['KPI Subtitle']
+    except KeyError:
+        subtitle_style = styles.add_style('KPI Subtitle', WD_STYLE_TYPE.PARAGRAPH)
+        subtitle_font = subtitle_style.font
+        subtitle_font.name = 'Arial'
+        subtitle_font.size = Pt(12)
+        subtitle_font.italic = True
     
     # Add company title
     title = doc.add_paragraph('Kampala Pharmaceutical Industries (KPI)', style='KPI Title')
@@ -343,13 +350,16 @@ def export_comments_word(request):
     # Add horizontal line
     doc.add_paragraph('_' * 70)
     
-    # BMR section style
-    bmr_style = styles.add_style('BMR Heading', WD_STYLE_TYPE.PARAGRAPH)
-    bmr_font = bmr_style.font
-    bmr_font.name = 'Arial'
-    bmr_font.size = Pt(14)
-    bmr_font.bold = True
-    bmr_font.color.rgb = RGBColor(0, 102, 0)  # Dark green
+    # BMR section style (check if exists first)
+    try:
+        bmr_style = styles['BMR Heading']
+    except KeyError:
+        bmr_style = styles.add_style('BMR Heading', WD_STYLE_TYPE.PARAGRAPH)
+        bmr_font = bmr_style.font
+        bmr_font.name = 'Arial'
+        bmr_font.size = Pt(14)
+        bmr_font.bold = True
+        bmr_font.color.rgb = RGBColor(0, 102, 0)  # Dark green
     
     # Add each BMR section
     for bmr_number, bmr_data in sorted(bmr_comments.items()):
@@ -376,11 +386,15 @@ def export_comments_word(request):
         
         # Add comments to table
         for comment in sorted(bmr_data['comments'], key=lambda x: x['date'] if x['date'] else datetime.min):
-            row_cells = table.add_row().cells
-            row_cells[0].text = comment['phase']
-            row_cells[1].text = comment['type']
-            row_cells[2].text = comment['date'].strftime('%Y-%m-%d %H:%M') if comment['date'] else 'N/A'
-            row_cells[3].text = comment['comments']
+            try:
+                row_cells = table.add_row().cells
+                row_cells[0].text = str(comment['phase']) if comment['phase'] else 'N/A'
+                row_cells[1].text = str(comment['type']) if comment['type'] else 'N/A'
+                row_cells[2].text = comment['date'].strftime('%Y-%m-%d %H:%M') if comment['date'] else 'N/A'
+                row_cells[3].text = str(comment['comments']) if comment['comments'] else 'No comment'
+            except Exception as e:
+                # Skip problematic rows but continue processing
+                continue
         
         # Add spacing after table
         doc.add_paragraph('')
@@ -398,7 +412,6 @@ def export_comments_word(request):
     doc.save(response)
     return response
 
-@login_required
 @login_required
 def export_comments_excel(request):
     """Export comments to Excel format with role-based filtering"""
