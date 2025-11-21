@@ -8,3 +8,5 @@ class WorkflowConfig(AppConfig):
         """Initialize the workflow app"""
         # Import signals for automatic overrun detection
         from . import signals
+        # Import signals_autoload to auto-load templates/defaults after migrate
+        from . import signals_autoload
