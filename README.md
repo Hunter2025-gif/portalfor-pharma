@@ -166,13 +166,17 @@ Final QA → Finished Goods
 - Django 4.0+
 - Virtual environment
 
+
 ### Installation
 1. Clone the repository
 2. Create virtual environment
 3. Install dependencies: `pip install -r requirements.txt`
 4. Run migrations: `python manage.py migrate`
-5. Create superuser: `python manage.py createsuperuser`
-6. Start server: `python manage.py runserver`
+5. **Initialize default workflow templates:**
+  - `python manage.py setup_workflow_templates`
+  - (To overwrite existing templates: `python manage.py setup_workflow_templates --overwrite`)
+6. Create superuser: `python manage.py createsuperuser`
+7. Start server: `python manage.py runserver`
 
 ### Initial Setup
 1. Configure user roles
