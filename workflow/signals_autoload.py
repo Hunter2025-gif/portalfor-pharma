@@ -14,3 +14,7 @@ def load_defaults_after_migrate(sender, **kwargs):
             call_command('init_system_defaults', verbosity=0)
         except Exception:
             pass
+        try:
+            call_command('setup_phases', verbosity=0)
+        except Exception:
+            pass
