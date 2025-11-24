@@ -35,7 +35,7 @@ class Command(BaseCommand):
             },
             'tablet': {
                 'name': 'Standard Tablet Workflow',
-                'description': 'Standard workflow for tablet production (both normal and type 2)',
+                'description': 'Standard workflow for tablet production (normal)',
                 'phases': [
                     (1, 'bmr_creation', 'BMR Creation', True, False, 1.0),
                     (2, 'regulatory_approval', 'Regulatory Approval', True, True, 24.0),
@@ -49,10 +49,30 @@ class Command(BaseCommand):
                     (10, 'coating', 'Coating', False, False, 8.0),  # Optional phase
                     (11, 'packaging_material_release', 'Packaging Material Release', True, False, 1.0),
                     (12, 'blister_packing', 'Blister Packing', True, False, 6.0),
-                    (13, 'bulk_packing', 'Bulk Packing', False, False, 4.0),  # Alternative to blister
-                    (14, 'secondary_packaging', 'Secondary Packaging', True, False, 4.0),
-                    (15, 'final_qa', 'Final QA', True, True, 3.0),
-                    (16, 'finished_goods_store', 'Finished Goods Store', True, False, 1.0),
+                    (13, 'secondary_packaging', 'Secondary Packaging', True, False, 4.0),
+                    (14, 'final_qa', 'Final QA', True, True, 3.0),
+                    (15, 'finished_goods_store', 'Finished Goods Store', True, False, 1.0),
+                ]
+            },
+            'tablet_type_2': {
+                'name': 'Tablet Type 2 Workflow',
+                'description': 'Workflow for tablet type 2 (bulk packing, no blister)',
+                'phases': [
+                    (1, 'bmr_creation', 'BMR Creation', True, False, 1.0),
+                    (2, 'regulatory_approval', 'Regulatory Approval', True, True, 24.0),
+                    (3, 'raw_material_release', 'Raw Material Release', True, False, 2.0),
+                    (4, 'material_dispensing', 'Material Dispensing', True, False, 3.0),
+                    (5, 'granulation', 'Granulation', True, False, 8.0),
+                    (6, 'blending', 'Blending', True, False, 6.0),
+                    (7, 'compression', 'Compression', True, False, 10.0),
+                    (8, 'post_compression_qc', 'Post-Compression QC', True, True, 2.0, 6),  # Rollback to blending
+                    (9, 'sorting', 'Sorting', True, False, 4.0),
+                    (10, 'coating', 'Coating', False, False, 8.0),  # Optional phase
+                    (11, 'packaging_material_release', 'Packaging Material Release', True, False, 1.0),
+                    (12, 'bulk_packing', 'Bulk Packing', True, False, 4.0),
+                    (13, 'secondary_packaging', 'Secondary Packaging', True, False, 4.0),
+                    (14, 'final_qa', 'Final QA', True, True, 3.0),
+                    (15, 'finished_goods_store', 'Finished Goods Store', True, False, 1.0),
                 ]
             },
             'capsule': {
